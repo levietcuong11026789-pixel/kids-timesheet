@@ -11,50 +11,53 @@
 </head>
 <body>
 
-  <!-- ========== LOADING ========== -->
   <div id="loading-screen">
     <div class="loading-coin">💰</div>
     <p>Đang kết nối...</p>
   </div>
 
-  <!-- ========== SETUP SCREEN ========== -->
   <div id="setup-screen" class="hidden">
     <div class="setup-card">
       <div class="setup-icon">🔧</div>
-      <h1>Cài đặt lần đầu</h1>
-      <p>Chưa tìm thấy Firebase config.<br>Hãy điền thông tin vào file <code>firebase-config.js</code> rồi tải lại trang.</p>
+      <h1>Cài đặt Firebase</h1>
+      <p>Điền thông tin vào file <code>firebase-config.js</code> rồi tải lại trang.</p>
       <a href="https://console.firebase.google.com/" target="_blank" class="btn-primary">Mở Firebase Console →</a>
     </div>
   </div>
 
-  <!-- ========== MAIN APP ========== -->
   <div id="app" class="hidden">
 
     <!-- TOP BAR -->
     <div class="topbar">
       <div class="topbar-left">
-        <div class="avatar" id="child-avatar">👦</div>
+        <div class="avatar">👦</div>
         <div>
           <div class="child-name" id="child-name-display">Bé Yêu</div>
           <div class="date-txt" id="date-display"></div>
         </div>
       </div>
-      <button class="parent-btn" id="parent-btn" onclick="openPinModal()">👨‍👩‍👧 Ba/Mẹ</button>
+      <button class="parent-btn" onclick="openPinModal()">👨‍👩‍👧 Ba/Mẹ</button>
     </div>
 
-    <!-- ===== CHILD VIEW ===== -->
+    <!-- CHILD VIEW -->
     <div id="child-view">
 
       <!-- Money Hero -->
       <div class="money-hero">
         <div class="money-ring">
           <div class="coin-icon">💰</div>
-          <div class="money-amount" id="today-amount">0 đ</div>
-          <div class="money-sub">Hôm nay</div>
+          <div class="money-amount" id="total-balance">0 đ</div>
+          <div class="money-sub">Tổng số dư</div>
         </div>
-        <div class="month-pill">
-          <span>Tháng này:</span>
-          <strong id="month-amount">0 đ</strong>
+        <div class="stats-row">
+          <div class="stat-pill">
+            <span>Hôm nay</span>
+            <strong id="today-amount" class="green-txt">+0 đ</strong>
+          </div>
+          <div class="stat-pill">
+            <span>Tháng này</span>
+            <strong id="month-amount" class="gold-txt">0 đ</strong>
+          </div>
         </div>
       </div>
 
@@ -63,11 +66,11 @@
         <div class="section-title">📚 Học tập</div>
         <div class="task-grid">
 
-          <div class="task-card" id="card-study" onclick="submitTask('study')">
+          <div class="task-card task-study" id="card-study" onclick="openStudyModal()">
             <div class="tc-icon">✏️</div>
-            <div class="tc-name">Học 4 môn</div>
-            <div class="tc-desc">Anh · Toán · Viết · Từ mới</div>
-            <div class="tc-reward green">+10,000 đ</div>
+            <div class="tc-name">Học hôm nay</div>
+            <div class="tc-desc">Đánh dấu từng môn đã học</div>
+            <div class="tc-reward green">4/4 môn = +10,000 đ</div>
             <div class="tc-badge hidden" id="badge-study"></div>
           </div>
 
@@ -118,6 +121,14 @@
             <div class="tc-badge hidden" id="badge-clean_room"></div>
           </div>
 
+          <!-- CUSTOM TASK CARD -->
+          <div class="task-card wide task-custom" onclick="openCustomModal()">
+            <div class="tc-icon">✍️</div>
+            <div class="tc-name">Việc khác...</div>
+            <div class="tc-desc">Con làm được việc gì khác? Ghi vào đây và đề xuất số tiền!</div>
+            <div class="tc-reward primary">Tự đề xuất</div>
+          </div>
+
         </div>
       </div>
 
@@ -134,45 +145,30 @@
       </div>
 
     </div>
-    <!-- end child-view -->
 
-
-    <!-- ===== PARENT VIEW ===== -->
+    <!-- PARENT VIEW -->
     <div id="parent-view" class="hidden">
       <div class="parent-header">
         <button class="back-btn" onclick="closeParentView()">← Quay lại</button>
         <h2>👨‍👩‍👧 Chế độ Ba/Mẹ</h2>
         <div style="width:80px"></div>
       </div>
-
       <div class="parent-body">
 
-        <!-- Pending approvals -->
         <div class="section-block">
           <div class="section-title">⏳ Cần duyệt</div>
           <div id="parent-pending-list"><div class="empty-msg">Không có gì cần duyệt ✨</div></div>
         </div>
 
-        <!-- Today summary -->
         <div class="section-block">
           <div class="section-title">📊 Tổng kết hôm nay</div>
           <div class="summary-row">
-            <div class="summary-card green-card">
-              <div class="sc-label">Tiền thưởng</div>
-              <div class="sc-val" id="parent-earned">0 đ</div>
-            </div>
-            <div class="summary-card red-card">
-              <div class="sc-label">Bị trừ</div>
-              <div class="sc-val" id="parent-deducted">0 đ</div>
-            </div>
-            <div class="summary-card gold-card">
-              <div class="sc-label">Tổng ngày</div>
-              <div class="sc-val" id="parent-today-total">0 đ</div>
-            </div>
+            <div class="summary-card green-card"><div class="sc-label">Thưởng</div><div class="sc-val" id="parent-earned">0 đ</div></div>
+            <div class="summary-card red-card"><div class="sc-label">Bị trừ</div><div class="sc-val" id="parent-deducted">0 đ</div></div>
+            <div class="summary-card gold-card"><div class="sc-label">Tổng ngày</div><div class="sc-val" id="parent-today-total">0 đ</div></div>
           </div>
         </div>
 
-        <!-- Monthly summary -->
         <div class="section-block">
           <div class="section-title">📅 Lịch sử tháng này</div>
           <div id="monthly-list" class="monthly-list"></div>
@@ -184,7 +180,15 @@
           </div>
         </div>
 
-        <!-- Settings -->
+        <div class="section-block">
+          <div class="section-title">💰 Số dư</div>
+          <div class="setting-row">
+            <label>Số dư hiện tại (đ):</label>
+            <input type="number" id="balance-input" placeholder="39000">
+            <button onclick="saveBalance()" class="setting-btn">Lưu</button>
+          </div>
+        </div>
+
         <div class="section-block">
           <div class="section-title">⚙️ Cài đặt</div>
           <div class="setting-row">
@@ -201,31 +205,19 @@
 
       </div>
     </div>
-    <!-- end parent-view -->
 
-
-    <!-- ===== MODALS ===== -->
-
-    <!-- PIN Modal -->
+    <!-- PIN MODAL -->
     <div id="pin-modal" class="modal hidden">
       <div class="modal-backdrop" onclick="closePinModal()"></div>
       <div class="modal-box">
         <button class="modal-close" onclick="closePinModal()">✕</button>
         <div class="modal-icon">🔐</div>
         <h2>Nhập mã PIN Ba/Mẹ</h2>
-        <div class="pin-dots" id="pin-dots">
-          <span></span><span></span><span></span><span></span>
-        </div>
+        <div class="pin-dots" id="pin-dots"><span></span><span></span><span></span><span></span></div>
         <div class="pin-pad">
-          <button onclick="pinKey('1')">1</button>
-          <button onclick="pinKey('2')">2</button>
-          <button onclick="pinKey('3')">3</button>
-          <button onclick="pinKey('4')">4</button>
-          <button onclick="pinKey('5')">5</button>
-          <button onclick="pinKey('6')">6</button>
-          <button onclick="pinKey('7')">7</button>
-          <button onclick="pinKey('8')">8</button>
-          <button onclick="pinKey('9')">9</button>
+          <button onclick="pinKey('1')">1</button><button onclick="pinKey('2')">2</button><button onclick="pinKey('3')">3</button>
+          <button onclick="pinKey('4')">4</button><button onclick="pinKey('5')">5</button><button onclick="pinKey('6')">6</button>
+          <button onclick="pinKey('7')">7</button><button onclick="pinKey('8')">8</button><button onclick="pinKey('9')">9</button>
           <button onclick="pinBackspace()" class="pin-del">⌫</button>
           <button onclick="pinKey('0')">0</button>
           <button onclick="pinConfirm()" class="pin-ok">✓</button>
@@ -234,7 +226,26 @@
       </div>
     </div>
 
-    <!-- Reading Modal -->
+    <!-- STUDY MODAL -->
+    <div id="study-modal" class="modal hidden">
+      <div class="modal-backdrop" onclick="closeStudyModal()"></div>
+      <div class="modal-box">
+        <button class="modal-close" onclick="closeStudyModal()">✕</button>
+        <div class="modal-icon">✏️</div>
+        <h2>Học hôm nay</h2>
+        <p class="modal-sub">Đánh dấu các môn đã học xong</p>
+        <div class="subject-checklist">
+          <label class="subject-check"><input type="checkbox" id="sub-english" onchange="updateStudyPreview()"><span class="check-box"></span><span class="check-label">🇬🇧 Tiếng Anh</span></label>
+          <label class="subject-check"><input type="checkbox" id="sub-math" onchange="updateStudyPreview()"><span class="check-box"></span><span class="check-label">🔢 Toán</span></label>
+          <label class="subject-check"><input type="checkbox" id="sub-viet" onchange="updateStudyPreview()"><span class="check-box"></span><span class="check-label">📝 Viết Tiếng Việt</span></label>
+          <label class="subject-check"><input type="checkbox" id="sub-vocab" onchange="updateStudyPreview()"><span class="check-box"></span><span class="check-label">🔤 Từ mới Tiếng Anh</span></label>
+        </div>
+        <div class="reward-preview" id="study-preview">Chọn môn để xem kết quả</div>
+        <button class="btn-submit" onclick="submitStudyTask()">📤 Gửi Ba/Mẹ duyệt</button>
+      </div>
+    </div>
+
+    <!-- READING MODAL -->
     <div id="reading-modal" class="modal hidden">
       <div class="modal-backdrop" onclick="closeReadingModal()"></div>
       <div class="modal-box">
@@ -252,7 +263,7 @@
       </div>
     </div>
 
-    <!-- Score Modal -->
+    <!-- SCORE MODAL -->
     <div id="score-modal" class="modal hidden">
       <div class="modal-backdrop" onclick="closeScoreModal()"></div>
       <div class="modal-box">
@@ -260,7 +271,6 @@
         <div class="modal-icon">🏆</div>
         <h2>Điểm kiểm tra</h2>
         <p class="modal-sub">Chọn môn và điểm số</p>
-
         <div class="modal-label">Môn học:</div>
         <div class="pill-group" id="subject-pills">
           <button class="pill active" onclick="selectPill(this,'subject')" data-val="Toán">🔢 Toán</button>
@@ -268,30 +278,45 @@
           <button class="pill" onclick="selectPill(this,'subject')" data-val="Tiếng Việt">📝 Việt</button>
           <button class="pill" onclick="selectPill(this,'subject')" data-val="Khác">📚 Khác</button>
         </div>
-
         <div class="modal-label">Điểm số:</div>
         <div class="pill-group" id="score-pills">
-          <button class="pill score-pill green-pill" onclick="selectPill(this,'score')" data-val="10">10 ⭐</button>
-          <button class="pill score-pill green-pill" onclick="selectPill(this,'score')" data-val="9">9 😊</button>
-          <button class="pill score-pill green-pill" onclick="selectPill(this,'score')" data-val="8">8 👍</button>
-          <button class="pill score-pill red-pill" onclick="selectPill(this,'score')" data-val="7">7 😐</button>
-          <button class="pill score-pill red-pill" onclick="selectPill(this,'score')" data-val="6">6 😢</button>
+          <button class="pill green-pill" onclick="selectPill(this,'score')" data-val="10">10 ⭐</button>
+          <button class="pill green-pill" onclick="selectPill(this,'score')" data-val="9">9 😊</button>
+          <button class="pill green-pill" onclick="selectPill(this,'score')" data-val="8">8 👍</button>
+          <button class="pill red-pill" onclick="selectPill(this,'score')" data-val="7">7 😐</button>
+          <button class="pill red-pill" onclick="selectPill(this,'score')" data-val="6">6 😢</button>
         </div>
-
         <div class="reward-preview" id="score-preview">Chọn điểm để xem thưởng</div>
         <button class="btn-submit" id="score-submit" onclick="submitScoreTask()" disabled>📤 Gửi Ba/Mẹ duyệt</button>
       </div>
     </div>
 
-  </div>
-  <!-- end #app -->
+    <!-- CUSTOM TASK MODAL -->
+    <div id="custom-modal" class="modal hidden">
+      <div class="modal-backdrop" onclick="closeCustomModal()"></div>
+      <div class="modal-box">
+        <button class="modal-close" onclick="closeCustomModal()">✕</button>
+        <div class="modal-icon">✍️</div>
+        <h2>Việc khác</h2>
+        <p class="modal-sub">Con đã làm được việc gì? Đề xuất số tiền thưởng!</p>
+        <div class="modal-label">Tên công việc:</div>
+        <input type="text" id="custom-task-name" class="text-input" placeholder="Vd: Rửa chén, Tưới cây, Gấp quần áo...">
+        <div class="modal-label">Đề xuất số tiền (đ):</div>
+        <div class="stepper">
+          <button onclick="changeCustomAmount(-500)" class="step-btn">−</button>
+          <div class="step-val"><span id="custom-amount">2000</span><small>đồng</small></div>
+          <button onclick="changeCustomAmount(500)" class="step-btn">+</button>
+        </div>
+        <div class="reward-preview" id="custom-preview">Ba/Mẹ sẽ xem xét và duyệt số tiền phù hợp</div>
+        <button class="btn-submit" onclick="submitCustomTask()">📤 Gửi Ba/Mẹ duyệt</button>
+      </div>
+    </div>
 
-  <!-- Toast -->
+  </div>
+
   <div id="toast" class="toast hidden"></div>
-  <!-- Coin FX layer -->
   <div id="fx-layer"></div>
 
-  <!-- Firebase Compat SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="firebase-config.js"></script>
