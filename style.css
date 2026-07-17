@@ -577,3 +577,85 @@ html, body {
 }
 .cal-task-row .green, .cal-net-row .green { color: var(--green); }
 .cal-task-row .red,   .cal-net-row .red   { color: var(--red); }
+
+/* ── STATS MODAL ── */
+.stats-box {
+  max-height: 88vh; overflow-y: auto;
+  padding-bottom: 24px;
+}
+.stats-tabs {
+  display: flex; gap: 6px; margin-bottom: 16px;
+  overflow-x: auto; padding-bottom: 4px;
+}
+.stab {
+  flex-shrink: 0; padding: 8px 14px; border-radius: 50px;
+  background: var(--glass); border: 1px solid var(--glass-b);
+  color: var(--text-dim); font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.stab.active {
+  background: rgba(167,139,250,.25); border-color: var(--primary);
+  color: var(--primary);
+}
+
+.spanel { animation: fade-in-up .2s ease; }
+
+.stat-hero {
+  font-size: 40px; font-weight: 900; text-align: center;
+  color: var(--green); line-height: 1; margin-bottom: 4px;
+}
+.stat-hero-sub {
+  font-size: 13px; color: var(--text-dim); text-align: center;
+  margin-bottom: 14px;
+}
+.stat-list { display: flex; flex-direction: column; gap: 4px; }
+.stat-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--glass); border: 1px solid var(--glass-b);
+  border-radius: var(--r-sm); padding: 10px 14px; font-size: 13px;
+}
+.stat-row small { color: var(--text-dim); margin-left: 4px; }
+.stat-row.stat-today { border-color: var(--primary); background: rgba(167,139,250,.1); }
+.stat-best {
+  margin-top: 12px; padding: 10px 14px;
+  background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.3);
+  border-radius: var(--r-sm); font-size: 13px;
+}
+
+/* Mini cards (month summary) */
+.stat-summary-row {
+  display: flex; gap: 8px; margin-bottom: 14px;
+}
+.mini-card {
+  flex: 1; background: var(--glass); border: 1px solid var(--glass-b);
+  border-radius: var(--r-sm); padding: 12px 8px; text-align: center;
+}
+.mc-val { font-size: 20px; font-weight: 900; color: var(--gold); }
+.mc-val.green { color: var(--green); }
+.mc-lbl { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+/* Rank / Leaderboard */
+.rank-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: var(--glass); border: 1px solid var(--glass-b);
+  border-radius: var(--r-sm); padding: 12px 14px; margin-bottom: 8px;
+}
+.rank-medal { font-size: 22px; line-height: 1; padding-top: 2px; }
+.rank-info { flex: 1; }
+.rank-name { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.rank-bar-wrap {
+  height: 6px; background: rgba(255,255,255,.1);
+  border-radius: 4px; overflow: hidden; margin-bottom: 5px;
+}
+.rank-bar {
+  height: 100%; border-radius: 4px;
+  transition: width .4s ease;
+}
+.green-bar { background: linear-gradient(90deg, var(--green-d), var(--green)); }
+.red-bar   { background: linear-gradient(90deg, var(--red-d),   var(--red)); }
+.rank-meta { font-size: 12px; color: var(--text-dim); }
+
+/* Helpers */
+.fw  { font-weight: 800; }
+.dim { color: var(--text-dim); }

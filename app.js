@@ -478,7 +478,201 @@ function spawnCoin(){
   },i*120);
 }
 
+// ── STATS SYSTEM ───────────────────────────────
+let currentStatTab = 'day';
+
+function openStatsModal() {
+  currentStatTab = 'day';
+  // Reset all tabs
+  ['day','week','month','rank'].forEach(t => {
+    document.getElementById(`stab-${t}`)?.classList.remove('active');
+    document.getElementById(`spanel-${t}`)?.classList.add('hidden');
+  });
+  document.getElementById('stab-day').classList.add('active');
+  document.getElementById('spanel-day').classList.remove('hidden');
+  loadDayStats();
+  show('stats-modal');
+}
+function closeStatsModal() { hide('stats-modal'); }
+
+function switchStatTab(tab) {
+  ['day','week','month','rank'].forEach(t => {
+    document.getElementById(`stab-${t}`)?.classList.remove('active');
+    document.getElementById(`spanel-${t}`)?.classList.add('hidden');
+  });
+  document.getElementById(`stab-${tab}`).classList.add('active');
+  document.getElementById(`spanel-${tab}`).classList.remove('hidden');
+  currentStatTab = tab;
+  if (tab === 'day')   loadDayStats();
+  if (tab === 'week')  loadWeekStats();
+  if (tab === 'month') loadMonthStats();
+  if (tab === 'rank')  loadRankStats();
+}
+
+// ── DAY STATS ──────────────────────────────────
+function loadDayStats() {
+  const approved = Object.values(todayTasks).filter(t => t.status === 'approved');
+  const total = approved.reduce((s,t) => s + t.value, 0);
+
+  const heroEl = document.getElementById('stat-day-hero');
+  heroEl.textContent = total.toLocaleString('vi-VN') + ' đ';
+  heroEl.style.color = total >= 0 ? 'var(--green)' : 'var(--red)';
+
+  if (!approved.length) {
+    document.getElementById('stat-day-tasks').innerHTML = '<div class="empty-msg">Chưa có việc nào được duyệt hôm nay</div>';
+    return;
+  }
+  const rows = approved.sort((a,b) => b.value - a.value).map(t => {
+    const cls = t.value >= 0 ? 'green' : 'red';
+    return `<div class="stat-row">
+      <span>${t.icon} ${t.label}${t.subLabel ? ` <small>${t.subLabel}</small>` : ''}</span>
+      <span class="${cls} fw">${t.value>=0?'+':'−'}${Math.abs(t.value).toLocaleString('vi-VN')} đ</span>
+    </div>`;
+  }).join('');
+  document.getElementById('stat-day-tasks').innerHTML = rows;
+}
+
+// ── WEEK STATS ─────────────────────────────────
+async function loadWeekStats() {
+  const now = new Date();
+  // Get Monday of this week
+  const dow = now.getDay(); // 0=Sun
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+
+  const dayNames = ['CN','T2','T3','T4','T5','T6','T7'];
+  const dayKeys = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    dayKeys.push({
+      key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
+      label: `${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`,
+      date: d
+    });
+  }
+
+  // Query Firebase for week range
+  const startKey = dayKeys[0].key, endKey = dayKeys[6].key;
+  const snap = await db.ref('tasks').orderByKey().startAt(startKey).endAt(endKey + '\uf8ff').get();
+  const data = snap.val() || {};
+
+  let weekTotal = 0, bestDay = null, bestVal = -Infinity;
+  const rows = dayKeys.map(({key, label, date}) => {
+    const dayData = data[key] || {};
+    const approved = Object.values(dayData).filter(t => t.status === 'approved');
+    const val = approved.reduce((s,t) => s+t.value, 0);
+    if (approved.length && val > bestVal) { bestVal = val; bestDay = label; }
+    weekTotal += val;
+    const isFuture = date > now;
+    const cls = val >= 0 ? 'green' : 'red';
+    const isToday = key === todayKey();
+    return `<div class="stat-row${isToday?' stat-today':''}">
+      <span>${label}${isToday?' 👈':''}</span>
+      <span class="${isFuture?'dim':''}">
+        ${isFuture ? '—' : `<span class="${cls} fw">${val>=0?'+':'−'}${Math.abs(val).toLocaleString('vi-VN')} đ</span>`}
+        ${approved.length ? `<small class="dim">(${approved.length} việc)</small>` : ''}
+      </span>
+    </div>`;
+  }).join('');
+
+  const heroEl = document.getElementById('stat-week-hero');
+  heroEl.textContent = weekTotal.toLocaleString('vi-VN') + ' đ';
+  heroEl.style.color = weekTotal >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('stat-week-days').innerHTML = rows;
+  document.getElementById('stat-week-best').innerHTML = bestDay
+    ? `🌟 <b>Ngày tốt nhất:</b> ${bestDay} — <span class="green fw">+${bestVal.toLocaleString('vi-VN')} đ</span>`
+    : '';
+}
+
+// ── MONTH STATS ────────────────────────────────
+async function loadMonthStats() {
+  const now = new Date();
+  const prefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const snap = await db.ref('tasks').orderByKey()
+    .startAt(prefix).endAt(prefix+'\uf8ff').get();
+  const data = snap.val() || {};
+
+  let monthTotal = 0, totalTasks = 0, earnedDays = 0;
+  const weekMap = {}; // week number → total
+
+  Object.entries(data).forEach(([dateKey, dayData]) => {
+    const approved = Object.values(dayData).filter(t => t.status === 'approved');
+    const dayVal = approved.reduce((s,t) => s+t.value, 0);
+    if (approved.length) { totalTasks += approved.length; earnedDays++; }
+    monthTotal += dayVal;
+
+    // Week grouping
+    const d = new Date(dateKey);
+    const weekNum = Math.ceil(d.getDate() / 7);
+    weekMap[weekNum] = (weekMap[weekNum] || 0) + dayVal;
+  });
+
+  const heroEl = document.getElementById('stat-month-hero');
+  heroEl.textContent = monthTotal.toLocaleString('vi-VN') + ' đ';
+  heroEl.style.color = monthTotal >= 0 ? 'var(--green)' : 'var(--red)';
+
+  document.getElementById('stat-month-summary').innerHTML = `
+    <div class="mini-card"><div class="mc-val">${totalTasks}</div><div class="mc-lbl">Việc hoàn thành</div></div>
+    <div class="mini-card"><div class="mc-val">${earnedDays}</div><div class="mc-lbl">Ngày có hoạt động</div></div>
+    <div class="mini-card"><div class="mc-val green">${earnedDays>0?Math.round(monthTotal/earnedDays).toLocaleString('vi-VN'):0}đ</div><div class="mc-lbl">Trung bình/ngày</div></div>
+  `;
+
+  const weekRows = Object.entries(weekMap).sort(([a],[b])=>a-b).map(([w, val]) => {
+    const cls = val >= 0 ? 'green' : 'red';
+    return `<div class="stat-row">
+      <span>📅 Tuần ${w} tháng này</span>
+      <span class="${cls} fw">${val>=0?'+':'−'}${Math.abs(val).toLocaleString('vi-VN')} đ</span>
+    </div>`;
+  }).join('') || '<div class="empty-msg">Chưa có dữ liệu tháng này</div>';
+  document.getElementById('stat-month-weeks').innerHTML = weekRows;
+}
+
+// ── RANK STATS (Leaderboard) ───────────────────
+async function loadRankStats() {
+  const prefix = monthPrefix();
+  const snap = await db.ref('tasks').orderByKey()
+    .startAt(prefix).endAt(prefix+'\uf8ff').get();
+  const data = snap.val() || {};
+
+  // Aggregate by task label
+  const rankMap = {};
+  Object.values(data).forEach(dayData => {
+    Object.values(dayData).forEach(t => {
+      if (t.status !== 'approved') return;
+      const key = `${t.icon}||${t.label}`;
+      if (!rankMap[key]) rankMap[key] = { icon: t.icon, label: t.label, total: 0, count: 0 };
+      rankMap[key].total += t.value;
+      rankMap[key].count++;
+    });
+  });
+
+  const ranked = Object.values(rankMap).sort((a,b) => b.total - a.total);
+
+  if (!ranked.length) {
+    document.getElementById('stat-rank-list').innerHTML = '<div class="empty-msg">Chưa có dữ liệu tháng này</div>';
+    return;
+  }
+
+  const medals = ['🥇','🥈','🥉'];
+  const rows = ranked.map((item, i) => {
+    const cls = item.total >= 0 ? 'green' : 'red';
+    const medal = medals[i] || `${i+1}.`;
+    const bar = Math.max(4, Math.round(Math.abs(item.total) / Math.abs(ranked[0].total) * 100));
+    return `<div class="rank-row">
+      <div class="rank-medal">${medal}</div>
+      <div class="rank-info">
+        <div class="rank-name">${item.icon} ${item.label}</div>
+        <div class="rank-bar-wrap"><div class="rank-bar ${cls}-bar" style="width:${bar}%"></div></div>
+        <div class="rank-meta">${item.count} lần · <span class="${cls} fw">${item.total>=0?'+':'−'}${Math.abs(item.total).toLocaleString('vi-VN')} đ</span></div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('stat-rank-list').innerHTML = rows;
+}
+
 // ── SOUND SYSTEM ───────────────────────────────
+
 function playSound(type) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();

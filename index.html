@@ -37,6 +37,7 @@
         </div>
       </div>
       <div style="display:flex;gap:8px">
+        <button class="parent-btn" onclick="openStatsModal()">📊</button>
         <button class="parent-btn" onclick="openCalModal()">📅</button>
         <button class="parent-btn" onclick="openPinModal()">👨‍👩‍👧 Ba/Mẹ</button>
       </div>
@@ -335,6 +336,53 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- STATS MODAL -->
+  <div id="stats-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeStatsModal()"></div>
+    <div class="modal-box stats-box">
+      <button class="modal-close" onclick="closeStatsModal()">✕</button>
+      <h2 style="margin-bottom:14px">📊 Thống kê</h2>
+
+      <!-- Tabs -->
+      <div class="stats-tabs">
+        <button class="stab active" id="stab-day"   onclick="switchStatTab('day')">📅 Ngày</button>
+        <button class="stab"        id="stab-week"  onclick="switchStatTab('week')">📆 Tuần</button>
+        <button class="stab"        id="stab-month" onclick="switchStatTab('month')">🗓️ Tháng</button>
+        <button class="stab"        id="stab-rank"  onclick="switchStatTab('rank')">🏆 Xếp hạng</button>
+      </div>
+
+      <!-- Day panel -->
+      <div id="spanel-day" class="spanel">
+        <div class="stat-hero" id="stat-day-hero">0 đ</div>
+        <div class="stat-hero-sub">Kiếm được hôm nay</div>
+        <div id="stat-day-tasks" class="stat-list"></div>
+      </div>
+
+      <!-- Week panel -->
+      <div id="spanel-week" class="spanel hidden">
+        <div class="stat-hero" id="stat-week-hero">0 đ</div>
+        <div class="stat-hero-sub">Kiếm được tuần này</div>
+        <div id="stat-week-days" class="stat-list"></div>
+        <div class="stat-best" id="stat-week-best"></div>
+      </div>
+
+      <!-- Month panel -->
+      <div id="spanel-month" class="spanel hidden">
+        <div class="stat-hero" id="stat-month-hero">0 đ</div>
+        <div class="stat-hero-sub">Kiếm được tháng này</div>
+        <div class="stat-summary-row" id="stat-month-summary"></div>
+        <div id="stat-month-weeks" class="stat-list"></div>
+      </div>
+
+      <!-- Rank panel -->
+      <div id="spanel-rank" class="spanel hidden">
+        <p class="stat-hero-sub" style="margin-bottom:12px">Top công việc kiếm nhiều nhất tháng này</p>
+        <div id="stat-rank-list" class="stat-list"></div>
+      </div>
+
+    </div>
   </div>
 
   <!-- CALENDAR MODAL -->
