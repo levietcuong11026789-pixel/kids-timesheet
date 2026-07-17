@@ -405,6 +405,70 @@ function showToast(msg){
   el.textContent=msg; el.classList.remove('hidden');
   clearTimeout(el._t); el._t=setTimeout(()=>el.classList.add('hidden'),3000);
 }
+// ── CHANGE PIN MODAL ──────────────────────────
+// Step: 'old' → 'new' → 'confirm'
+let chpinStep = 'old', chpinBuf = '', chpinNewVal = '';
+
+function openChangePinModal() {
+  chpinStep = 'old'; chpinBuf = ''; chpinNewVal = '';
+  document.getElementById('chpin-title').textContent = 'Nhập PIN hiện tại';
+  document.getElementById('chpin-sub').textContent   = 'Xác nhận trước khi đổi';
+  updateChpinDots(); hide('chpin-err');
+  show('change-pin-modal');
+}
+function closeChangePinModal() { hide('change-pin-modal'); }
+
+function chpinKey(d) {
+  if (chpinBuf.length >= 4) return;
+  chpinBuf += d; updateChpinDots();
+  if (chpinBuf.length === 4) setTimeout(chpinNext, 200);
+}
+function chpinBack() { chpinBuf = chpinBuf.slice(0,-1); updateChpinDots(); }
+function updateChpinDots() {
+  document.querySelectorAll('#chpin-dots span').forEach((s,i) =>
+    s.classList.toggle('filled', i < chpinBuf.length));
+}
+function showChpinErr(msg) {
+  const el = document.getElementById('chpin-err');
+  el.textContent = '❌ ' + msg; el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 2200);
+  chpinBuf = ''; updateChpinDots();
+}
+
+async function chpinNext() {
+  if (chpinStep === 'old') {
+    // Verify current PIN
+    const snap = await db.ref('settings/parentPin').get();
+    const correct = snap.val() || '1234';
+    if (chpinBuf !== correct) { showChpinErr('PIN cũ không đúng!'); return; }
+    // Move to new PIN
+    chpinStep = 'new'; chpinBuf = '';
+    document.getElementById('chpin-title').textContent = 'Nhập PIN mới';
+    document.getElementById('chpin-sub').textContent   = 'Chọn mã PIN mới (4 chữ số)';
+    updateChpinDots();
+
+  } else if (chpinStep === 'new') {
+    if (chpinBuf.length < 4) { showChpinErr('Nhập đủ 4 số!'); return; }
+    chpinNewVal = chpinBuf; chpinBuf = '';
+    chpinStep = 'confirm';
+    document.getElementById('chpin-title').textContent = 'Xác nhận PIN mới';
+    document.getElementById('chpin-sub').textContent   = 'Nhập lại PIN mới vừa chọn';
+    updateChpinDots();
+
+  } else if (chpinStep === 'confirm') {
+    if (chpinBuf !== chpinNewVal) {
+      showChpinErr('PIN không khớp, thử lại!');
+      chpinStep = 'new'; chpinBuf = '';
+      document.getElementById('chpin-title').textContent = 'Nhập PIN mới';
+      document.getElementById('chpin-sub').textContent   = 'Chọn mã PIN mới (4 chữ số)';
+      updateChpinDots(); return;
+    }
+    await db.ref('settings/parentPin').set(chpinNewVal);
+    closeChangePinModal();
+    showToast('🔐 Đã đổi mật khẩu PIN thành công!');
+  }
+}
+
 function spawnCoin(){
   const layer=document.getElementById('fx-layer');
   for(let i=0;i<5;i++) setTimeout(()=>{
@@ -413,3 +477,4 @@ function spawnCoin(){
     layer.appendChild(el); setTimeout(()=>el.remove(),1300);
   },i*120);
 }
+

@@ -197,9 +197,8 @@
             <button onclick="saveChildName()" class="setting-btn">Lưu</button>
           </div>
           <div class="setting-row">
-            <label>Đổi PIN:</label>
-            <input type="number" id="pin-input-new" placeholder="PIN mới (4 số)" maxlength="4" style="width:120px">
-            <button onclick="saveNewPin()" class="setting-btn">Đổi</button>
+            <label>Mật khẩu:</label>
+            <button onclick="openChangePinModal()" class="setting-btn" style="background:var(--primary-d);width:100%">🔐 Đổi mật khẩu PIN</button>
           </div>
         </div>
 
@@ -288,6 +287,27 @@
         </div>
         <div class="reward-preview" id="score-preview">Chọn điểm để xem thưởng</div>
         <button class="btn-submit" id="score-submit" onclick="submitScoreTask()" disabled>📤 Gửi Ba/Mẹ duyệt</button>
+      </div>
+    </div>
+
+    <!-- CHANGE PIN MODAL -->
+    <div id="change-pin-modal" class="modal hidden">
+      <div class="modal-backdrop" onclick="closeChangePinModal()"></div>
+      <div class="modal-box">
+        <button class="modal-close" onclick="closeChangePinModal()">✕</button>
+        <div class="modal-icon">🔐</div>
+        <h2 id="chpin-title">Nhập PIN hiện tại</h2>
+        <p class="modal-sub" id="chpin-sub">Xác nhận trước khi đổi</p>
+        <div class="pin-dots" id="chpin-dots"><span></span><span></span><span></span><span></span></div>
+        <div class="pin-pad">
+          <button onclick="chpinKey('1')">1</button><button onclick="chpinKey('2')">2</button><button onclick="chpinKey('3')">3</button>
+          <button onclick="chpinKey('4')">4</button><button onclick="chpinKey('5')">5</button><button onclick="chpinKey('6')">6</button>
+          <button onclick="chpinKey('7')">7</button><button onclick="chpinKey('8')">8</button><button onclick="chpinKey('9')">9</button>
+          <button onclick="chpinBack()" class="pin-del">⌫</button>
+          <button onclick="chpinKey('0')">0</button>
+          <button onclick="chpinNext()" class="pin-ok">✓</button>
+        </div>
+        <div class="pin-err hidden" id="chpin-err"></div>
       </div>
     </div>
 
