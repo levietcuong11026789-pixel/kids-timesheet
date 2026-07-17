@@ -191,7 +191,7 @@ async function submitTask(type) {
     type, label: cfg.label, icon: cfg.icon, value: cfg.value,
     status: 'pending', createdAt: Date.now()
   });
-  spawnCoin(); showToast('📤 Đã gửi! Chờ Ba/Mẹ duyệt ⏳');
+  spawnCoin(); playSound('submit'); showToast('📤 Đã gửi! Chờ Ba/Mẹ duyệt ⏳');
 }
 
 // Study
@@ -231,7 +231,7 @@ async function submitStudyTask() {
     type:'study', label:'Học hôm nay', icon:'✏️', subLabel, value,
     status:'pending', createdAt:Date.now()
   });
-  closeStudyModal(); spawnCoin();
+  closeStudyModal(); spawnCoin(); playSound('submit');
   showToast(count===4 ? '🎉 Học đủ 4 môn! Chờ Ba/Mẹ duyệt' : `⚠️ Học ${count}/4 môn, chờ Ba/Mẹ duyệt`);
 }
 
@@ -258,7 +258,7 @@ async function submitReadingTask() {
     type:'reading', label:'Đọc sách', icon:'📖',
     subLabel:`${readingPages} trang`, value, status:'pending', createdAt:Date.now()
   });
-  closeReadingModal(); spawnCoin(); showToast(`📚 Đã gửi ${readingPages} trang! ⏳`);
+  closeReadingModal(); spawnCoin(); playSound('submit'); showToast(`📚 Đã gửi ${readingPages} trang! ⏳`);
 }
 
 // Score
@@ -291,7 +291,7 @@ async function submitScoreTask() {
     subLabel:`Điểm ${selectedScore}`, value:SCORE_VALUES[selectedScore],
     status:'pending', createdAt:Date.now()
   });
-  closeScoreModal(); spawnCoin(); showToast(`🏆 Đã gửi điểm ${selectedScore}! ⏳`);
+  closeScoreModal(); spawnCoin(); playSound('submit'); showToast(`🏆 Đã gửi điểm ${selectedScore}! ⏳`);
 }
 
 // Custom task
@@ -310,7 +310,7 @@ async function submitCustomTask() {
     value:customAmount, status:'pending', createdAt:Date.now()
   });
   document.getElementById('custom-task-name').value='';
-  closeCustomModal(); spawnCoin(); showToast('📤 Đã gửi đề xuất! Ba/Mẹ sẽ xem và duyệt ⏳');
+  closeCustomModal(); spawnCoin(); playSound('submit'); showToast('📤 Đã gửi đề xuất! Ba/Mẹ sẽ xem và duyệt ⏳');
 }
 
 // ── PARENT VIEW ────────────────────────────────
@@ -371,11 +371,11 @@ async function approveTask(id, isCustom) {
   }
   await db.ref(`tasks/${todayKey()}/${id}/status`).set('approved');
   await db.ref('settings/totalEarned').transaction(c=>(c||0)+finalValue);
-  showToast('✅ Đã duyệt! Bé được thưởng 🎉');
+  playSound('approve'); showToast('✅ Đã duyệt! Bé được thưởng 🎉');
 }
 async function rejectTask(id) {
   await db.ref(`tasks/${todayKey()}/${id}/status`).set('rejected');
-  showToast('❌ Đã từ chối nhiệm vụ này');
+  playSound('reject'); showToast('❌ Đã từ chối nhiệm vụ này');
 }
 
 async function saveChildName() {
@@ -477,4 +477,141 @@ function spawnCoin(){
     layer.appendChild(el); setTimeout(()=>el.remove(),1300);
   },i*120);
 }
+
+// ── SOUND SYSTEM ───────────────────────────────
+function playSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (type === 'submit') {
+      // Ascending ding — bé gửi task
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.18);
+      gain.gain.setValueAtTime(0.28, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+      osc.start(); osc.stop(ctx.currentTime + 0.3);
+
+    } else if (type === 'approve') {
+      // Coin jingle — Ba/Mẹ duyệt
+      [523, 659, 784, 1047].forEach((freq, i) => {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'triangle'; osc.frequency.value = freq;
+        const t = ctx.currentTime + i * 0.1;
+        gain.gain.setValueAtTime(0.25, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        osc.start(t); osc.stop(t + 0.25);
+      });
+
+    } else if (type === 'reject') {
+      // Descending buzz — từ chối
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(330, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(165, ctx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.start(); osc.stop(ctx.currentTime + 0.38);
+    }
+  } catch(e) { /* browser may block audio */ }
+}
+
+// ── CALENDAR ───────────────────────────────────
+let calYear, calMonth;
+
+function openCalModal() {
+  const now = new Date();
+  calYear = now.getFullYear(); calMonth = now.getMonth();
+  renderCal();
+  hide('cal-day-detail');
+  show('cal-modal');
+}
+function closeCalModal() { hide('cal-modal'); }
+function calPrev() { calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCal(); hide('cal-day-detail'); }
+function calNext() { calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCal(); hide('cal-day-detail'); }
+
+async function renderCal() {
+  const monthNames = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6',
+                      'Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+  document.getElementById('cal-month-label').textContent = `${monthNames[calMonth]} / ${calYear}`;
+
+  // Fetch all tasks for this month
+  const prefix = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
+  const snap = await db.ref('tasks').orderByKey()
+    .startAt(prefix).endAt(prefix+'\uf8ff').get();
+  const monthData = snap.val() || {};
+
+  // Build calendar grid
+  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  let html = '';
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-cell empty"></div>';
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKey = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayData = monthData[dateKey] || null;
+    const status = getDayStatus(dayData);
+    const isToday = dateKey === todayStr ? ' cal-today' : '';
+    const isFuture = new Date(calYear, calMonth, d) > today;
+
+    let dotHtml = '';
+    if (!isFuture && status !== 'empty') {
+      dotHtml = `<span class="cal-dot ${status}-dot"></span>`;
+    }
+    html += `<div class="cal-cell${isToday}" onclick="showDayDetail('${dateKey}')">
+      <span class="cal-day-num">${d}</span>${dotHtml}
+    </div>`;
+  }
+  document.getElementById('cal-grid').innerHTML = html;
+}
+
+function getDayStatus(dayData) {
+  if (!dayData) return 'empty';
+  const tasks = Object.values(dayData);
+  const approved = tasks.filter(t => t.status === 'approved');
+  if (!approved.length) {
+    // Has pending/rejected but nothing approved → red
+    return tasks.length ? 'red' : 'empty';
+  }
+  const net = approved.reduce((s, t) => s + t.value, 0);
+  if (net >= 8000) return 'green';
+  if (net >= 1000) return 'yellow';
+  return 'red';
+}
+
+async function showDayDetail(dateKey) {
+  const snap = await db.ref(`tasks/${dateKey}`).get();
+  const data = snap.val() || {};
+  const [y, m, d] = dateKey.split('-');
+  document.getElementById('cal-detail-title').textContent = `📋 Ngày ${parseInt(d)}/${parseInt(m)}`;
+
+  const tasks = Object.values(data);
+  if (!tasks.length) {
+    document.getElementById('cal-detail-list').innerHTML = '<div class="empty-msg">Không có hoạt động nào</div>';
+  } else {
+    let net = 0;
+    const rows = tasks.map(t => {
+      const cls = t.status==='approved' ? (t.value>=0?'green':'red') : (t.status==='rejected'?'red':'');
+      const badge = t.status==='approved' ? '✅' : t.status==='rejected' ? '❌' : '⏳';
+      if (t.status==='approved') net += t.value;
+      const valStr = t.value >= 0 ? `+${t.value.toLocaleString('vi-VN')}đ` : `−${Math.abs(t.value).toLocaleString('vi-VN')}đ`;
+      return `<div class="cal-task-row">
+        <span>${t.icon} ${t.label}</span>
+        <span>${badge} <b class="${cls}">${valStr}</b></span>
+      </div>`;
+    }).join('');
+    const totalCls = net >= 0 ? 'green' : 'red';
+    document.getElementById('cal-detail-list').innerHTML =
+      rows + `<div class="cal-net-row"><b>Tổng ngày:</b> <b class="${totalCls}">${net>=0?'+':'−'}${Math.abs(net).toLocaleString('vi-VN')} đ</b></div>`;
+  }
+  show('cal-day-detail');
+}
+
 

@@ -36,7 +36,10 @@
           <div class="date-txt" id="date-display"></div>
         </div>
       </div>
-      <button class="parent-btn" onclick="openPinModal()">👨‍👩‍👧 Ba/Mẹ</button>
+      <div style="display:flex;gap:8px">
+        <button class="parent-btn" onclick="openCalModal()">📅</button>
+        <button class="parent-btn" onclick="openPinModal()">👨‍👩‍👧 Ba/Mẹ</button>
+      </div>
     </div>
 
     <!-- CHILD VIEW -->
@@ -332,6 +335,33 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- CALENDAR MODAL -->
+  <div id="cal-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeCalModal()"></div>
+    <div class="modal-box cal-modal-box">
+      <button class="modal-close" onclick="closeCalModal()">✕</button>
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="calPrev()">◀</button>
+        <h2 id="cal-month-label">Tháng 7/2026</h2>
+        <button class="cal-nav-btn" onclick="calNext()">▶</button>
+      </div>
+      <div class="cal-weekdays">
+        <span>CN</span><span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="cal-legend">
+        <span><span class="leg-dot green-dot"></span>Hoàn thành tốt</span>
+        <span><span class="leg-dot yellow-dot"></span>Một phần</span>
+        <span><span class="leg-dot red-dot"></span>Chưa hoàn thành</span>
+      </div>
+      <!-- Day detail -->
+      <div id="cal-day-detail" class="cal-day-detail hidden">
+        <div class="cal-detail-title" id="cal-detail-title"></div>
+        <div id="cal-detail-list"></div>
+      </div>
+    </div>
   </div>
 
   <div id="toast" class="toast hidden"></div>
