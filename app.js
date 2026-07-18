@@ -48,6 +48,8 @@ function monthPrefix() {
 let db, currentPin = '', selectedSubject = 'Toán', selectedScore = null;
 let readingPages = 5, customAmount = 2000;
 let todayTasks = {}, parentOpen = false, openingBalance = 39000;
+let currentKid = 'be1';
+function kp(p) { return 'kids/' + currentKid + '/' + p; }
 
 // ── INIT ───────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -57,22 +59,45 @@ window.addEventListener('DOMContentLoaded', () => {
   try {
     firebase.initializeApp(firebaseConfig);
     db = firebase.database();
-    initApp();
+    migrateOldData().then(() => initApp());
   } catch(e) { hide('loading-screen'); show('setup-screen'); }
 });
 
+// Migrate old flat data to kids/be1/
+async function migrateOldData() {
+  const migrated = await db.ref('_migrated').get();
+  if (migrated.val()) return;
+  const oldTasks = await db.ref('tasks').get();
+  const oldSettings = await db.ref('settings').get();
+  if (oldTasks.val()) await db.ref('kids/be1/tasks').set(oldTasks.val());
+  if (oldSettings.val()) await db.ref('kids/be1/settings').set(oldSettings.val());
+  // Set default for be2
+  await db.ref('kids/be2/settings').set({ childName: 'Bé Hai', parentPin: '1234', openingBalance: 0, totalEarned: 0 });
+  await db.ref('_migrated').set(true);
+}
+
+let _taskListener = null, _settingsListener = null;
+
 async function initApp() {
-  const snap = await db.ref('settings').get();
+  // Detach old listeners
+  if (_taskListener) db.ref(_taskListener).off();
+  if (_settingsListener) db.ref(_settingsListener).off();
+
+  // Update kid tabs UI
+  document.querySelectorAll('.kid-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + currentKid)?.classList.add('active');
+
+  const snap = await db.ref(kp('settings')).get();
   const s = snap.val() || {};
 
   // Set defaults
-  if (!s.parentPin)       await db.ref('settings/parentPin').set('1234');
-  if (s.openingBalance === undefined) await db.ref('settings/openingBalance').set(39000);
-  if (s.totalEarned  === undefined)   await db.ref('settings/totalEarned').set(0);
+  if (!s.parentPin)       await db.ref(kp('settings/parentPin')).set('1234');
+  if (s.openingBalance === undefined) await db.ref(kp('settings/openingBalance')).set(0);
+  if (s.totalEarned  === undefined)   await db.ref(kp('settings/totalEarned')).set(0);
 
-  openingBalance = s.openingBalance ?? 39000;
+  openingBalance = s.openingBalance ?? 0;
 
-  const childName = s.childName || 'Bé Yêu';
+  const childName = s.childName || (currentKid === 'be1' ? 'Bé Lớn' : 'Bé Nhỏ');
   document.getElementById('child-name-display').textContent = childName;
   document.getElementById('name-input').value = childName;
   document.getElementById('balance-input').value = openingBalance;
@@ -83,20 +108,36 @@ async function initApp() {
     `${days[now.getDay()]}, ${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()}`;
 
   // Real-time listener for today's tasks
-  db.ref(`tasks/${todayKey()}`).on('value', snap => {
+  const taskPath = kp(`tasks/${todayKey()}`);
+  _taskListener = taskPath;
+  db.ref(taskPath).on('value', snap => {
     todayTasks = snap.val() || {};
     renderChildView();
     if (parentOpen) renderParentView();
   });
 
   // Real-time listener for settings (balance updates)
-  db.ref('settings').on('value', snap => {
+  const settingsPath = kp('settings');
+  _settingsListener = settingsPath;
+  db.ref(settingsPath).on('value', snap => {
     const sv = snap.val() || {};
-    openingBalance = sv.openingBalance ?? 39000;
+    openingBalance = sv.openingBalance ?? 0;
     updateTotalBalance(sv.totalEarned ?? 0);
   });
 
   hide('loading-screen'); show('app');
+}
+
+function switchKid(kid) {
+  if (kid === currentKid) return;
+  // Detach old listeners
+  if (_taskListener) { db.ref(_taskListener).off(); _taskListener = null; }
+  if (_settingsListener) { db.ref(_settingsListener).off(); _settingsListener = null; }
+  currentKid = kid;
+  todayTasks = {};
+  parentOpen = false;
+  hide('parent-view');
+  initApp();
 }
 
 // ── TOTAL BALANCE ──────────────────────────────
@@ -175,7 +216,7 @@ function buildApproveBtns(task) {
 
 // ── MONTH TOTAL ────────────────────────────────
 async function loadMonthTotal() {
-  const snap = await db.ref('tasks').orderByKey()
+  const snap = await db.ref(kp('tasks')).orderByKey()
     .startAt(monthPrefix()).endAt(monthPrefix()+'\uf8ff').get();
   let total = 0;
   if (snap.val()) Object.values(snap.val()).forEach(day =>
@@ -191,7 +232,7 @@ async function submitTask(type) {
       t => t.type === type && (t.status==='pending'||t.status==='approved'));
     if (already) { showToast('⏳ Đã đăng ký rồi!'); return; }
   }
-  await db.ref(`tasks/${todayKey()}`).push({
+  await db.ref(kp(`tasks/${todayKey()}`)).push({
     type, label: cfg.label, icon: cfg.icon, value: cfg.value,
     status: 'pending', createdAt: Date.now()
   });
@@ -231,7 +272,7 @@ async function submitStudyTask() {
   const count = checked.length;
   const value = STUDY_REWARDS[count];
   const subLabel = count === 4 ? 'Học đủ 4 môn ✅' : `Học ${count}/4 môn: ${checked.map(s=>s.label).join(', ')}`;
-  await db.ref(`tasks/${todayKey()}`).push({
+  await db.ref(kp(`tasks/${todayKey()}`)).push({
     type:'study', label:'Học hôm nay', icon:'✏️', subLabel, value,
     status:'pending', createdAt:Date.now()
   });
@@ -258,7 +299,7 @@ function updateReadingUI() {
 async function submitReadingTask() {
   if (readingPages < 5) { showToast('📖 Cần ít nhất 5 trang!'); return; }
   const value = calcReadingReward(readingPages);
-  await db.ref(`tasks/${todayKey()}`).push({
+  await db.ref(kp(`tasks/${todayKey()}`)).push({
     type:'reading', label:'Đọc sách', icon:'📖',
     subLabel:`${readingPages} trang`, value, status:'pending', createdAt:Date.now()
   });
@@ -290,7 +331,7 @@ function updateScorePreview() {
 }
 async function submitScoreTask() {
   if(selectedScore===null) return;
-  await db.ref(`tasks/${todayKey()}`).push({
+  await db.ref(kp(`tasks/${todayKey()}`)).push({
     type:'score', label:`Điểm ${selectedSubject}`, icon:'🏆',
     subLabel:`Điểm ${selectedScore}`, value:SCORE_VALUES[selectedScore],
     status:'pending', createdAt:Date.now()
@@ -308,7 +349,7 @@ function updateCustomPreview() {
 async function submitCustomTask() {
   const name=document.getElementById('custom-task-name').value.trim();
   if(!name){showToast('⚠️ Con cần ghi tên công việc!');return;}
-  await db.ref(`tasks/${todayKey()}`).push({
+  await db.ref(kp(`tasks/${todayKey()}`)).push({
     type:'custom', label:name, icon:'✍️',
     subLabel:`Đề xuất: ${customAmount.toLocaleString('vi-VN')} đ`,
     value:customAmount, status:'pending', createdAt:Date.now()
@@ -324,7 +365,7 @@ function pinKey(d) { if(currentPin.length>=4)return; currentPin+=d; updatePinDot
 function pinBackspace() { currentPin=currentPin.slice(0,-1); updatePinDots(); }
 function updatePinDots() { document.querySelectorAll('#pin-dots span').forEach((s,i)=>s.classList.toggle('filled',i<currentPin.length)); }
 async function pinConfirm() {
-  const snap=await db.ref('settings/parentPin').get();
+  const snap=await db.ref(kp('settings/parentPin')).get();
   if(currentPin===(snap.val()||'1234')){ closePinModal(); openParentView(); }
   else { show('pin-err'); currentPin=''; updatePinDots(); setTimeout(()=>hide('pin-err'),2000); }
 }
@@ -350,7 +391,7 @@ async function renderParentView() {
 }
 
 async function renderMonthlyBreakdown() {
-  const snap=await db.ref('tasks').orderByKey().startAt(monthPrefix()).endAt(monthPrefix()+'\uf8ff').get();
+  const snap=await db.ref(kp('tasks')).orderByKey().startAt(monthPrefix()).endAt(monthPrefix()+'\uf8ff').get();
   const data=snap.val()||{};
   let monthTotal=0;
   const rows=Object.entries(data).sort(([a],[b])=>b.localeCompare(a)).map(([dk,dayTasks])=>{
@@ -371,33 +412,33 @@ async function approveTask(id, isCustom) {
   if(isCustom){
     const inp=document.getElementById(`amt-${id}`);
     if(inp) finalValue=parseInt(inp.value)||task.value;
-    await db.ref(`tasks/${todayKey()}/${id}/value`).set(finalValue);
+    await db.ref(kp(`tasks/${todayKey()}/${id}/value`)).set(finalValue);
   }
-  await db.ref(`tasks/${todayKey()}/${id}/status`).set('approved');
-  await db.ref('settings/totalEarned').transaction(c=>(c||0)+finalValue);
+  await db.ref(kp(`tasks/${todayKey()}/${id}/status`)).set('approved');
+  await db.ref(kp('settings/totalEarned')).transaction(c=>(c||0)+finalValue);
   playSound('approve'); showToast('✅ Đã duyệt! Bé được thưởng 🎉');
 }
 async function rejectTask(id) {
-  await db.ref(`tasks/${todayKey()}/${id}/status`).set('rejected');
+  await db.ref(kp(`tasks/${todayKey()}/${id}/status`)).set('rejected');
   playSound('reject'); showToast('❌ Đã từ chối nhiệm vụ này');
 }
 
 async function saveChildName() {
   const n=document.getElementById('name-input').value.trim()||'Bé Yêu';
-  await db.ref('settings/childName').set(n);
+  await db.ref(kp('settings/childName')).set(n);
   document.getElementById('child-name-display').textContent=n;
   showToast('💾 Đã lưu tên bé!');
 }
 async function saveNewPin() {
   const v=document.getElementById('pin-input-new').value.trim();
   if(!/^\d{4}$/.test(v)){showToast('⚠️ PIN phải là 4 chữ số!');return;}
-  await db.ref('settings/parentPin').set(v);
+  await db.ref(kp('settings/parentPin')).set(v);
   document.getElementById('pin-input-new').value='';
   showToast('🔐 Đã đổi PIN!');
 }
 async function saveBalance() {
   const v=parseInt(document.getElementById('balance-input').value)||0;
-  await db.ref('settings/openingBalance').set(v);
+  await db.ref(kp('settings/openingBalance')).set(v);
   showToast('💰 Đã cập nhật số dư!');
 }
 
@@ -442,7 +483,7 @@ function showChpinErr(msg) {
 async function chpinNext() {
   if (chpinStep === 'old') {
     // Verify current PIN
-    const snap = await db.ref('settings/parentPin').get();
+    const snap = await db.ref(kp('settings/parentPin')).get();
     const correct = snap.val() || '1234';
     if (chpinBuf !== correct) { showChpinErr('PIN cũ không đúng!'); return; }
     // Move to new PIN
@@ -467,7 +508,7 @@ async function chpinNext() {
       document.getElementById('chpin-sub').textContent   = 'Chọn mã PIN mới (4 chữ số)';
       updateChpinDots(); return;
     }
-    await db.ref('settings/parentPin').set(chpinNewVal);
+    await db.ref(kp('settings/parentPin')).set(chpinNewVal);
     closeChangePinModal();
     showToast('🔐 Đã đổi mật khẩu PIN thành công!');
   }
@@ -558,7 +599,7 @@ async function loadWeekStats() {
 
   // Query Firebase for week range
   const startKey = dayKeys[0].key, endKey = dayKeys[6].key;
-  const snap = await db.ref('tasks').orderByKey().startAt(startKey).endAt(endKey + '\uf8ff').get();
+  const snap = await db.ref(kp('tasks')).orderByKey().startAt(startKey).endAt(endKey + '\uf8ff').get();
   const data = snap.val() || {};
 
   let weekTotal = 0, bestDay = null, bestVal = -Infinity;
@@ -593,7 +634,7 @@ async function loadWeekStats() {
 async function loadMonthStats() {
   const now = new Date();
   const prefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const snap = await db.ref('tasks').orderByKey()
+  const snap = await db.ref(kp('tasks')).orderByKey()
     .startAt(prefix).endAt(prefix+'\uf8ff').get();
   const data = snap.val() || {};
 
@@ -635,7 +676,7 @@ async function loadMonthStats() {
 // ── RANK STATS (Leaderboard) ───────────────────
 async function loadRankStats() {
   const prefix = monthPrefix();
-  const snap = await db.ref('tasks').orderByKey()
+  const snap = await db.ref(kp('tasks')).orderByKey()
     .startAt(prefix).endAt(prefix+'\uf8ff').get();
   const data = snap.val() || {};
 
@@ -738,7 +779,7 @@ async function renderCal() {
 
   // Fetch all tasks for this month
   const prefix = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
-  const snap = await db.ref('tasks').orderByKey()
+  const snap = await db.ref(kp('tasks')).orderByKey()
     .startAt(prefix).endAt(prefix+'\uf8ff').get();
   const monthData = snap.val() || {};
 
@@ -785,7 +826,7 @@ function getDayStatus(dayData) {
 }
 
 async function showDayDetail(dateKey) {
-  const snap = await db.ref(`tasks/${dateKey}`).get();
+  const snap = await db.ref(kp(`tasks/${dateKey}`)).get();
   const data = snap.val() || {};
   const [y, m, d] = dateKey.split('-');
   document.getElementById('cal-detail-title').textContent = `📋 Ngày ${parseInt(d)}/${parseInt(m)}`;
@@ -811,5 +852,7 @@ async function showDayDetail(dateKey) {
   }
   show('cal-day-detail');
 }
+
+
 
 

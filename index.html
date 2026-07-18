@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -47,7 +47,11 @@
         <button class="parent-btn" onclick="openCalModal()">📅</button>
         <button class="parent-btn" onclick="openPinModal()">👨‍👩‍👧 Ba/Mẹ</button>
       </div>
-    </div>
+
+    <!-- KID TABS -->
+    <div class="kid-tabs">
+      <button class="kid-tab active" id="tab-be1" onclick="switchKid('be1')">👦 Bé Lớn</button>
+      <button class="kid-tab" id="tab-be2" onclick="switchKid('be2')">👧 Bé Nhỏ</button></div></div>
 
     <!-- CHILD VIEW -->
     <div id="child-view">
@@ -427,3 +431,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+

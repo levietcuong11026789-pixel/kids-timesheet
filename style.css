@@ -659,3 +659,9 @@ html, body {
 /* Helpers */
 .fw  { font-weight: 800; }
 .dim { color: var(--text-dim); }
+
+/* KID TABS */
+.kid-tabs{display:flex;gap:8px;padding:10px 16px;background:rgba(10,14,26,.6);border-bottom:1px solid rgba(255,255,255,.08)}
+.kid-tab{flex:1;padding:10px 16px;border-radius:50px;background:rgba(255,255,255,.06);border:2px solid transparent;color:rgba(255,255,255,.5);font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s}
+.kid-tab.active{background:linear-gradient(135deg,rgba(139,92,246,.3),rgba(96,165,250,.3));border-color:rgba(139,92,246,.6);color:#fff;box-shadow:0 2px 12px rgba(139,92,246,.3)}
+.kid-tab:hover{background:rgba(255,255,255,.1)}
