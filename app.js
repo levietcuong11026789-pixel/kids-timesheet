@@ -1,6 +1,10 @@
 // =============================================
 // BẢNG CHẤM CÔNG BÉ YÊU — app.js v2
 // =============================================
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
 
 const REWARDS = {
   sweep:      { label: 'Quét nhà',  icon: '🧹', value: 1000,  once: true },
