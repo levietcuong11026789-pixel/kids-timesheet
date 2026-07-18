@@ -665,3 +665,22 @@ html, body {
 .kid-tab{flex:1;padding:10px 16px;border-radius:50px;background:rgba(255,255,255,.06);border:2px solid transparent;color:rgba(255,255,255,.5);font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s}
 .kid-tab.active{background:linear-gradient(135deg,rgba(139,92,246,.3),rgba(96,165,250,.3));border-color:rgba(139,92,246,.6);color:#fff;box-shadow:0 2px 12px rgba(139,92,246,.3)}
 .kid-tab:hover{background:rgba(255,255,255,.1)}
+
+/* PENALTY */
+.task-penalty{border-color:rgba(239,68,68,.3)!important}
+.task-penalty .tc-reward.red{color:var(--red)}
+.penalty-reasons{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
+.penalty-reasons .pill{padding:8px 12px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:13px;cursor:pointer;font-family:inherit}
+.penalty-reasons .pill.active{background:rgba(239,68,68,.3);border-color:var(--red)}
+.red-btn{background:var(--red)!important}
+.amount-stepper{display:flex;align-items:center;justify-content:center;gap:16px;margin:10px 0 16px}
+.amount-stepper button{width:50px;height:40px;border-radius:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit}
+.amount-stepper span{font-size:22px;font-weight:800;min-width:100px;text-align:center}
+/* TASK MANAGER */
+.tm-row{display:flex;align-items:center;gap:8px;padding:10px;background:rgba(255,255,255,.06);border-radius:12px;margin-bottom:6px}
+.tm-info{flex:1;font-size:14px;font-weight:700}
+.tm-val{width:80px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:14px;text-align:right;font-family:inherit}
+.btn-small{width:36px;height:36px;border-radius:8px;border:none;cursor:pointer;font-size:16px;color:#fff}
+.green-btn{background:var(--green)!important}
+.add-task-row{display:flex;gap:6px;align-items:center}
+.add-task-row .modal-input{padding:8px;margin:0}

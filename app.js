@@ -125,6 +125,7 @@ async function initApp() {
     updateTotalBalance(sv.totalEarned ?? 0);
   });
 
+  await loadTaskConfig();
   hide('loading-screen'); show('app');
 }
 
@@ -162,18 +163,8 @@ function renderChildView() {
   todayEl.className = todayTotal >= 0 ? 'green-txt' : 'red-txt';
   loadMonthTotal();
 
-  // Card states for once-per-day tasks
-  Object.keys(REWARDS).filter(t => REWARDS[t].once).forEach(type => {
-    const card  = document.getElementById(`card-${type}`);
-    const badge = document.getElementById(`badge-${type}`);
-    if (!card) return;
-    const hasPending  = Object.values(todayTasks).some(t => t.type === type && t.status === 'pending');
-    const hasApproved = Object.values(todayTasks).some(t => t.type === type && t.status === 'approved');
-    card.classList.remove('pending','approved');
-    if (badge) badge.classList.add('hidden');
-    if (hasApproved) { card.classList.add('approved'); if(badge){badge.textContent='✅';badge.classList.remove('hidden');} }
-    else if (hasPending) { card.classList.add('pending'); if(badge){badge.textContent='⏳';badge.classList.remove('hidden');} }
-  });
+  // Re-render dynamic task grid with status
+  renderTaskGrid();
 
   // Pending list
   const pEl = document.getElementById('pending-list');
@@ -856,3 +847,118 @@ async function showDayDetail(dateKey) {
 
 
 
+
+// ── DEFAULT TASK CONFIGS ────────────────────────
+const DEFAULT_CFG = {
+  be1: [
+    { id:'sweep', icon:'🧹', label:'Quét nhà', value:1000 },
+    { id:'mop', icon:'🫧', label:'Lau nhà', value:2000 },
+    { id:'clean_room', icon:'🛏️', label:'Dọn phòng', value:2000 },
+    { id:'reading', icon:'📖', label:'Đọc sách', value:3000 },
+    { id:'sub_english', icon:'📚', label:'Học Tiếng Anh', value:2500 },
+    { id:'sub_math', icon:'✏️', label:'Học Toán', value:2500 },
+    { id:'sub_viet', icon:'📝', label:'Viết Tiếng Việt', value:2500 },
+    { id:'sub_vocab', icon:'🔤', label:'Từ mới Tiếng Anh', value:2500 }
+  ],
+  be2: [
+    { id:'clean_room', icon:'🛏️', label:'Dọn phòng', value:1000 },
+    { id:'english', icon:'📖', label:'Học Tiếng Anh', value:1000 },
+    { id:'math', icon:'✏️', label:'Học Toán', value:1000 },
+    { id:'listen', icon:'🎧', label:'Nghe Tiếng Anh', value:1000 }
+  ]
+};
+
+let taskConfig = [];
+let tmpTaskConfig = [];
+
+async function loadTaskConfig() {
+  const snap = await db.ref(kp('config/tasks')).get();
+  taskConfig = snap.val() || DEFAULT_CFG[currentKid] || [];
+  if (!snap.val()) await db.ref(kp('config/tasks')).set(taskConfig);
+  renderTaskGrid();
+}
+
+function renderTaskGrid() {
+  const grid = document.getElementById('task-grid');
+  if (!grid) return;
+  grid.innerHTML = taskConfig.map((t, i) => {
+    const done = Object.values(todayTasks).some(
+      x => x.taskId === t.id && (x.status === 'pending' || x.status === 'approved'));
+    const badge = done ? (Object.values(todayTasks).some(
+      x => x.taskId === t.id && x.status === 'approved') ? '✅' : '⏳') : '';
+    return `<div class="task-card ${done ? (badge === '✅' ? 'approved' : 'pending') : ''}" onclick="submitSimpleTask('${t.id}')">
+      <div class="tc-icon">${t.icon}</div>
+      <div class="tc-name">${t.label}</div>
+      <div class="tc-reward green">+${t.value.toLocaleString('vi-VN')} đ</div>
+      ${badge ? `<div class="tc-badge">${badge}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function submitSimpleTask(taskId) {
+  const cfg = taskConfig.find(t => t.id === taskId);
+  if (!cfg) return;
+  const already = Object.values(todayTasks).some(
+    t => t.taskId === taskId && (t.status === 'pending' || t.status === 'approved'));
+  if (already) { showToast('⏳ Đã đăng ký rồi!'); return; }
+  await db.ref(kp(`tasks/${todayKey()}`)).push({
+    type: 'simple', taskId: cfg.id, label: cfg.label, icon: cfg.icon,
+    value: cfg.value, status: 'pending', createdAt: Date.now()
+  });
+  spawnCoin(); playSound('submit'); showToast('📤 Đã gửi! Chờ Ba/Mẹ duyệt ⏳');
+}
+
+// ── PENALTY ─────────────────────────────────────
+let penaltyAmount = 2000, penaltyReason = '';
+function openPenaltyModal() { penaltyAmount = 2000; penaltyReason = ''; updatePenaltyUI(); show('penalty-modal'); }
+function closePenaltyModal() { hide('penalty-modal'); }
+function selectPenaltyReason(el, reason) {
+  penaltyReason = reason;
+  document.querySelectorAll('#penalty-reasons .pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+}
+function changePenalty(d) { penaltyAmount = Math.max(500, penaltyAmount + d); updatePenaltyUI(); }
+function updatePenaltyUI() { document.getElementById('penalty-amount').textContent = penaltyAmount.toLocaleString('vi-VN'); }
+async function submitPenalty() {
+  if (!penaltyReason) { showToast('⚠️ Chọn lý do phạt!'); return; }
+  const note = document.getElementById('penalty-note').value.trim();
+  await db.ref(kp(`tasks/${todayKey()}`)).push({
+    type: 'penalty', label: `Phạt: ${penaltyReason}`, icon: '⚠️',
+    subLabel: note || penaltyReason, value: -penaltyAmount,
+    status: 'approved', createdAt: Date.now()
+  });
+  await db.ref(kp('settings/totalEarned')).transaction(c => (c || 0) - penaltyAmount);
+  closePenaltyModal(); playSound('reject');
+  showToast(`⚠️ Đã phạt −${penaltyAmount.toLocaleString('vi-VN')} đ`);
+}
+
+// ── TASK MANAGER ────────────────────────────────
+function openTaskManager() { tmpTaskConfig = JSON.parse(JSON.stringify(taskConfig)); renderTaskManagerList(); show('task-manager-modal'); }
+function closeTaskManager() { hide('task-manager-modal'); }
+function renderTaskManagerList() {
+  document.getElementById('task-manager-list').innerHTML = tmpTaskConfig.map((t, i) =>
+    `<div class="tm-row">
+      <span class="tm-info">${t.icon} ${t.label}</span>
+      <input type="number" class="tm-val" value="${t.value}" onchange="tmpTaskConfig[${i}].value=parseInt(this.value)||0" inputmode="numeric">
+      <button class="btn-small red-btn" onclick="tmpTaskConfig.splice(${i},1);renderTaskManagerList()">🗑️</button>
+    </div>`
+  ).join('') || '<div class="empty-msg">Chưa có việc nào</div>';
+}
+function addNewTask() {
+  const icon = document.getElementById('new-task-icon').value.trim() || '📌';
+  const label = document.getElementById('new-task-label').value.trim();
+  const value = parseInt(document.getElementById('new-task-value').value) || 1000;
+  if (!label) { showToast('⚠️ Nhập tên việc!'); return; }
+  const id = label.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now().toString(36);
+  tmpTaskConfig.push({ id, icon, label, value });
+  document.getElementById('new-task-icon').value = '';
+  document.getElementById('new-task-label').value = '';
+  document.getElementById('new-task-value').value = '';
+  renderTaskManagerList();
+}
+async function saveTaskConfig() {
+  taskConfig = tmpTaskConfig;
+  await db.ref(kp('config/tasks')).set(taskConfig);
+  closeTaskManager(); renderTaskGrid();
+  showToast('✅ Đã lưu cài đặt việc!');
+}

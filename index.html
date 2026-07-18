@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -75,74 +75,30 @@
         </div>
       </div>
 
-      <!-- STUDY SECTION -->
+
+      <!-- TASKS - rendered dynamically per kid -->
       <div class="section-block">
-        <div class="section-title">📚 Học tập</div>
-        <div class="task-grid">
-
-          <div class="task-card task-study" id="card-study" onclick="openStudyModal()">
-            <div class="tc-icon">✏️</div>
-            <div class="tc-name">Học hôm nay</div>
-            <div class="tc-desc">Đánh dấu từng môn đã học</div>
-            <div class="tc-reward green">4/4 môn = +10,000 đ</div>
-            <div class="tc-badge hidden" id="badge-study"></div>
-          </div>
-
-          <div class="task-card" id="card-reading" onclick="openReadingModal()">
-            <div class="tc-icon">📖</div>
-            <div class="tc-name">Đọc sách</div>
-            <div class="tc-desc">5 trang = 3k · +500đ/trang</div>
-            <div class="tc-reward green">+3,000 đ~</div>
-            <div class="tc-badge hidden" id="badge-reading"></div>
-          </div>
-
-          <div class="task-card wide" id="card-score" onclick="openScoreModal()">
+        <div class="section-title">📋 Việc của bé</div>
+        <div class="task-grid" id="task-grid"></div>
+        <div class="task-grid" style="margin-top:10px">
+          <div class="task-card" onclick="openScoreModal()">
             <div class="tc-icon">🏆</div>
-            <div class="tc-name">Điểm kiểm tra</div>
-            <div class="tc-desc">Đ10 +5k · Đ9 +3k · Đ8 +1k · Đ7 −3k · Đ6 −5k</div>
+            <div class="tc-name">Điểm KT</div>
+            <div class="tc-desc">Nhập điểm nhiều lần/ngày</div>
             <div class="tc-reward green">+1k ~ +5k đ</div>
           </div>
-
-        </div>
-      </div>
-
-      <!-- HOUSEWORK SECTION -->
-      <div class="section-block">
-        <div class="section-title">🏠 Việc nhà</div>
-        <div class="task-grid">
-
-          <div class="task-card" id="card-sweep" onclick="submitTask('sweep')">
-            <div class="tc-icon">🧹</div>
-            <div class="tc-name">Quét nhà</div>
-            <div class="tc-desc">Quét sạch sẽ</div>
-            <div class="tc-reward green">+1,000 đ</div>
-            <div class="tc-badge hidden" id="badge-sweep"></div>
-          </div>
-
-          <div class="task-card" id="card-mop" onclick="submitTask('mop')">
-            <div class="tc-icon">🫧</div>
-            <div class="tc-name">Lau nhà</div>
-            <div class="tc-desc">Lau sạch sàn</div>
-            <div class="tc-reward green">+2,000 đ</div>
-            <div class="tc-badge hidden" id="badge-mop"></div>
-          </div>
-
-          <div class="task-card" id="card-clean" onclick="submitTask('clean_room')">
-            <div class="tc-icon">🛏️</div>
-            <div class="tc-name">Dọn phòng</div>
-            <div class="tc-desc">Phòng gọn gàng</div>
-            <div class="tc-reward green">+2,000 đ</div>
-            <div class="tc-badge hidden" id="badge-clean_room"></div>
-          </div>
-
-          <!-- CUSTOM TASK CARD -->
-          <div class="task-card wide task-custom" onclick="openCustomModal()">
+          <div class="task-card task-custom" onclick="openCustomModal()">
             <div class="tc-icon">✍️</div>
-            <div class="tc-name">Việc khác...</div>
-            <div class="tc-desc">Con làm được việc gì khác? Ghi vào đây và đề xuất số tiền!</div>
+            <div class="tc-name">Việc khác</div>
+            <div class="tc-desc">Đề xuất việc + số tiền</div>
             <div class="tc-reward primary">Tự đề xuất</div>
           </div>
-
+          <div class="task-card task-penalty" onclick="openPenaltyModal()">
+            <div class="tc-icon">⚠️</div>
+            <div class="tc-name">Phạt</div>
+            <div class="tc-desc">Ba/Mẹ trừ tiền</div>
+            <div class="tc-reward red">Trừ tiền</div>
+          </div>
         </div>
       </div>
 
@@ -214,8 +170,57 @@
             <label>Mật khẩu:</label>
             <button onclick="openChangePinModal()" class="setting-btn" style="background:var(--primary-d);width:100%">🔐 Đổi mật khẩu PIN</button>
           </div>
+          <div class="setting-row">
+            <button onclick="openTaskManager()" class="setting-btn" style="background:linear-gradient(135deg,#8b5cf6,#3b82f6);width:100%">📋 Quản lý việc & số tiền</button>
+          </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- PENALTY MODAL -->
+    <div id="penalty-modal" class="modal hidden">
+      <div class="modal-backdrop" onclick="closePenaltyModal()"></div>
+      <div class="modal-box">
+        <button class="modal-close" onclick="closePenaltyModal()">✕</button>
+        <div class="modal-icon">⚠️</div>
+        <h2>Phạt bé</h2>
+        <div class="modal-label">Lý do:</div>
+        <div class="penalty-reasons" id="penalty-reasons">
+          <button class="pill" onclick="selectPenaltyReason(this,'Không ngoan')">😤 Không ngoan</button>
+          <button class="pill" onclick="selectPenaltyReason(this,'Không nghe lời')">🙉 Không nghe lời</button>
+          <button class="pill" onclick="selectPenaltyReason(this,'Đánh nhau')">👊 Đánh nhau</button>
+          <button class="pill" onclick="selectPenaltyReason(this,'Nói dối')">🤥 Nói dối</button>
+          <button class="pill" onclick="selectPenaltyReason(this,'Khác')">📝 Khác</button>
+        </div>
+        <div class="modal-label">Ghi chú:</div>
+        <input type="text" id="penalty-note" class="modal-input" placeholder="Chi tiết...">
+        <div class="modal-label">Số tiền phạt (đ):</div>
+        <div class="amount-stepper">
+          <button onclick="changePenalty(-1000)">−1k</button>
+          <span id="penalty-amount">2,000</span>
+          <button onclick="changePenalty(1000)">+1k</button>
+        </div>
+        <button class="btn-primary red-btn" onclick="submitPenalty()">⚠️ Xác nhận phạt</button>
+      </div>
+    </div>
+
+    <!-- TASK MANAGER MODAL -->
+    <div id="task-manager-modal" class="modal hidden">
+      <div class="modal-backdrop" onclick="closeTaskManager()"></div>
+      <div class="modal-box" style="max-height:85vh;overflow-y:auto">
+        <button class="modal-close" onclick="closeTaskManager()">✕</button>
+        <div class="modal-icon">⚙️</div>
+        <h2>Quản lý việc</h2>
+        <div id="task-manager-list"></div>
+        <div class="modal-label">Thêm việc mới:</div>
+        <div class="add-task-row">
+          <input type="text" id="new-task-icon" class="modal-input" placeholder="Icon" style="width:60px;text-align:center">
+          <input type="text" id="new-task-label" class="modal-input" placeholder="Tên việc" style="flex:1">
+          <input type="number" id="new-task-value" class="modal-input" placeholder="Tiền" style="width:80px" inputmode="numeric">
+          <button class="btn-small green-btn" onclick="addNewTask()">+</button>
+        </div>
+        <button class="btn-primary" onclick="saveTaskConfig()" style="margin-top:14px">💾 Lưu cài đặt</button>
       </div>
     </div>
 
