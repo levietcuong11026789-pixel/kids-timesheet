@@ -1,13 +1,13 @@
 // ── SERVICE WORKER — kids-timesheet ─────────────
 // ⬆️ MỖI KHI CẬP NHẬT APP, CHỈ CẦN ĐỔI SỐ VERSION NÀY
-const APP_VERSION = '3.7.0';
+const APP_VERSION = '3.8.0';
 const CACHE_NAME = `kids-v${APP_VERSION}`;
 
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=3.7.0',
-  './app.js?v=3.7.0',
+  './style.css?v=3.8.0',
+  './app.js?v=3.8.0',
   './firebase-config.js',
   './manifest.json',
   './version.json'

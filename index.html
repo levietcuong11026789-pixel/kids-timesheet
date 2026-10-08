@@ -8,12 +8,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Chấm Công">
-  <meta name="theme-color" content="#1a103c">
+  <meta name="theme-color" content="#f8fafc">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=3.7.0">
+  <link rel="stylesheet" href="style.css?v=3.8.0">
 </head>
 <body>
 
@@ -81,8 +81,7 @@
       <!-- TASKS - rendered dynamically per kid -->
       <div class="section-block">
         <div class="section-header-nav" style="margin-bottom:10px">
-          <div class="section-title" style="margin:0">📋 Việc của bé</div>
-          <button id="btn-toggle-multi" class="btn-toggle-multi" onclick="toggleMultiSelectMode()">☑️ Chọn nhiều việc</button>
+          <div class="section-title" style="margin:0">📋 Việc của bé <small style="font-size:12px;color:var(--text-dim);font-weight:700;text-transform:none;margin-left:6px">(Chạm để chọn • Chạm lại để bỏ chọn)</small></div>
         </div>
         <div class="task-grid" id="task-grid"></div>
       </div>
@@ -535,7 +534,7 @@
     </div>
     <div class="multi-bar-actions">
       <button class="btn-submit-multi" onclick="submitMultiTasks()">📤 Gửi Ba/Mẹ duyệt</button>
-      <button class="btn-cancel-multi" onclick="toggleMultiSelectMode(false)" title="Huỷ chọn">✕</button>
+      <button class="btn-cancel-multi" onclick="clearSelectedTasks()" title="Bỏ chọn tất cả">✕</button>
     </div>
   </div>
 
@@ -553,7 +552,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=3.7.0"></script>
+  <script src="app.js?v=3.8.0"></script>
 </body>
 </html>
 

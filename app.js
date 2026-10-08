@@ -1,8 +1,8 @@
 // =============================================
-// BẢNG CHẤM CÔNG BÉ YÊU — app.js v3.7.0
+// BẢNG CHẤM CÔNG BÉ YÊU — app.js v3.8.0
 // =============================================
 
-const CURRENT_APP_VERSION = '3.7.0';
+const CURRENT_APP_VERSION = '3.8.0';
 let _isUpdatingApp = false;
 let _waitingServiceWorker = null;
 
@@ -1414,32 +1414,11 @@ async function loadTaskConfig() {
   renderTaskGrid();
 }
 
-// ── MULTI-SELECT MODE ON MAIN SCREEN ───────────
-let isMultiSelectMode = false;
+// ── TASK SELECTION & TOGGLE (Ấn là chọn, ấn lại là tự động bỏ chọn) ──
 let multiSelectedTaskIds = new Set();
 
-function toggleMultiSelectMode(forcedState) {
-  if (typeof forcedState === 'boolean') {
-    isMultiSelectMode = forcedState;
-  } else {
-    isMultiSelectMode = !isMultiSelectMode;
-  }
-  
-  if (!isMultiSelectMode) {
-    multiSelectedTaskIds.clear();
-  }
-  
-  const btn = document.getElementById('btn-toggle-multi');
-  if (btn) {
-    btn.classList.toggle('active', isMultiSelectMode);
-    btn.innerHTML = isMultiSelectMode ? '✕ Huỷ chọn nhiều' : '☑️ Chọn nhiều việc';
-  }
-  
-  const grid = document.getElementById('task-grid');
-  if (grid) {
-    grid.classList.toggle('multi-mode', isMultiSelectMode);
-  }
-  
+function clearSelectedTasks() {
+  multiSelectedTaskIds.clear();
   updateMultiSelectBar();
   renderTaskGrid();
 }
@@ -1447,7 +1426,7 @@ function toggleMultiSelectMode(forcedState) {
 function updateMultiSelectBar() {
   const bar = document.getElementById('multiselect-bar');
   if (!bar) return;
-  if (!isMultiSelectMode || multiSelectedTaskIds.size === 0) {
+  if (multiSelectedTaskIds.size === 0) {
     bar.classList.remove('show');
     return;
   }
@@ -1464,28 +1443,33 @@ function updateMultiSelectBar() {
   bar.classList.add('show');
 }
 
-function onTaskCardClick(taskId, isApproved, isPending, pendingFirebaseId, label) {
+async function onTaskCardClick(taskId, isApproved, isPending, pendingFirebaseId, label) {
   if (isApproved) {
     showToast('✅ Việc này đã được Ba/Mẹ duyệt!');
     return;
   }
+  
+  // ✅ Nếu đang ở trạng thái chờ duyệt → Chạm vào là TỰ ĐỘNG BỎ CHỌN / HỦY NGAY không cần hỏi rườm rà
   if (isPending) {
-    cancelPendingTask(pendingFirebaseId, label);
-    return;
-  }
-  
-  if (isMultiSelectMode) {
-    if (multiSelectedTaskIds.has(taskId)) {
-      multiSelectedTaskIds.delete(taskId);
-    } else {
-      multiSelectedTaskIds.add(taskId);
+    if (pendingFirebaseId) {
+      await db.ref(kp(`tasks/${todayKey()}/${pendingFirebaseId}`)).remove();
+      playSound('reject');
+      showToast(`🔄 Đã bỏ chọn "${label}"!`);
     }
-    renderTaskGrid();
-    updateMultiSelectBar();
     return;
   }
   
-  submitSimpleTask(taskId);
+  // ✅ Ấn là chọn, ấn lại là TỰ ĐỘNG BỎ CHỌN!
+  if (multiSelectedTaskIds.has(taskId)) {
+    multiSelectedTaskIds.delete(taskId);
+    playSound('tap');
+  } else {
+    multiSelectedTaskIds.add(taskId);
+    playSound('submit');
+  }
+  
+  renderTaskGrid();
+  updateMultiSelectBar();
 }
 
 async function submitMultiTasks() {
@@ -1521,7 +1505,8 @@ async function submitMultiTasks() {
   }
   
   multiSelectedTaskIds.clear();
-  toggleMultiSelectMode(false);
+  updateMultiSelectBar();
+  renderTaskGrid();
   spawnCoin();
   playSound('submit');
   showToast(`📤 Đã gửi ${submittedCount} công việc! Chờ Ba/Mẹ duyệt ⏳`);
@@ -1540,17 +1525,17 @@ function renderTaskGrid() {
       ([,x]) => x.taskId === t.id && x.status === 'approved');
     const isPending  = !!pendingEntry;
     const isApproved = !!approvedEntry;
-    const isMultiSelected = isMultiSelectMode && multiSelectedTaskIds.has(t.id);
+    const isSelected = multiSelectedTaskIds.has(t.id);
     const badge = isApproved ? '✅' : isPending ? '⏳' : '';
     let stateClass = isApproved ? 'approved' : isPending ? 'pending' : '';
-    if (isMultiSelected) stateClass += ' multi-selected';
+    if (isSelected) stateClass += ' multi-selected';
     const pId = pendingEntry ? pendingEntry[0] : '';
     return `<div class="task-card ${stateClass}" data-idx="${i}" onclick="onTaskCardClick('${t.id}', ${isApproved}, ${isPending}, '${pId}', '${t.label}')">
       <div class="tc-icon">${t.icon}</div>
       <div class="tc-name">${t.label}</div>
       <div class="tc-reward green">+${t.value.toLocaleString('vi-VN')} đ</div>
       ${badge ? `<div class="tc-badge">${badge}</div>` : ''}
-      ${isPending ? `<div class="tc-undo-hint">Nhấn để chọn lại</div>` : ''}
+      ${isPending ? `<div class="tc-undo-hint">Chạm để bỏ chọn</div>` : ''}
     </div>`;
   }).join('');
 
@@ -1592,7 +1577,7 @@ function setupDragReorder() {
 }
 
 function onGridPointerDown(e) {
-  if (isMultiSelectMode) return;
+  if (multiSelectedTaskIds.size > 0) return;
   // Only drag cards with data-idx (configurable tasks, not fixed ones)
   const card = e.target.closest('.task-card[data-idx]');
   if (!card) return;
