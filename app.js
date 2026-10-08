@@ -2,55 +2,36 @@
 // BẢNG CHẤM CÔNG BÉ YÊU — app.js v3
 // =============================================
 
-// ── SERVICE WORKER REGISTRATION (PWA Auto-Update) ──
+// ── SERVICE WORKER REGISTRATION (PWA Auto-Update Seamlessly) ──
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(reg => {
-    // Kiểm tra update ngay khi load và mỗi 30 giây
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+    // Kiểm tra update ngay khi load và mỗi 15 giây
     reg.update();
-    setInterval(() => reg.update(), 30000);
+    setInterval(() => reg.update(), 15000);
 
-    // ✅ Phát hiện SW mới được tải về (installing)
+    // Nếu đã có worker đang chờ (waiting) → tự động activate ngay
+    if (reg.waiting) {
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+
+    // ✅ Phát hiện SW mới được tải về (installing) → kích hoạt tự động
     reg.addEventListener('updatefound', () => {
       const newWorker = reg.installing;
       if (!newWorker) return;
       newWorker.addEventListener('statechange', () => {
-        // SW mới đã installed (waiting) → báo người dùng
         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          showUpdateBanner();
+          // Tự động chuyển qua phiên bản mới không cần nhấn nút
+          newWorker.postMessage({ type: 'SKIP_WAITING' });
         }
       });
     });
   }).catch(() => {});
 
-  // ✅ Khi SW đổi (sau skipWaiting) → reload để áp dụng bản mới
+  // ✅ Khi SW đổi (sau skipWaiting) → tự động reload để áp dụng bản mới ngay lập tức
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!refreshing) { refreshing = true; window.location.reload(); }
-  });
-}
-
-function showUpdateBanner() {
-  if (document.getElementById('update-banner')) return;
-  const banner = document.createElement('div');
-  banner.id = 'update-banner';
-  banner.className = 'update-banner';
-  banner.innerHTML = `
-    <div class="update-banner-content">
-      <span>🆕 Có bản cập nhật mới!</span>
-      <div class="update-banner-btns">
-        <button class="update-btn-ok" onclick="applyUpdate()">⬆️ Cập nhật ngay</button>
-        <button class="update-btn-skip" onclick="document.getElementById('update-banner').remove()">Bỏ qua</button>
-      </div>
-    </div>`;
-  document.body.appendChild(banner);
-  requestAnimationFrame(() => banner.classList.add('update-banner-show'));
-}
-
-function applyUpdate() {
-  navigator.serviceWorker.getRegistration().then(reg => {
-    if (reg && reg.waiting) {
-      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-    } else {
+    if (!refreshing) {
+      refreshing = true;
       window.location.reload();
     }
   });

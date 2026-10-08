@@ -1,6 +1,6 @@
 // ── SERVICE WORKER — kids-timesheet ─────────────
 // ⬆️ MỖI KHI CẬP NHẬT APP, CHỈ CẦN ĐỔI SỐ VERSION NÀY
-const APP_VERSION = '3.6.0';
+const APP_VERSION = '3.6.1';
 const CACHE_NAME = `kids-v${APP_VERSION}`;
 
 const ASSETS = [
@@ -17,7 +17,6 @@ self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
   );
-  // ✅ skipWaiting ngay để SW mới activate, app.js sẽ handle reload
   self.skipWaiting();
 });
 
@@ -34,7 +33,7 @@ self.addEventListener('activate', e => {
 // Fetch: network-first for everything, fallback to cache for offline
 self.addEventListener('fetch', e => {
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then(res => {
         if (res && res.status === 200 && res.type === 'basic') {
           const resClone = res.clone();
@@ -46,7 +45,7 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// ✅ Lắng nghe lệnh SKIP_WAITING từ applyUpdate() trong app.js
+// ✅ Lắng nghe lệnh SKIP_WAITING từ app.js
 self.addEventListener('message', e => {
   if (e.data && e.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
