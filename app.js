@@ -1,8 +1,8 @@
 // =============================================
-// BẢNG CHẤM CÔNG BÉ YÊU — app.js v3.6.2
+// BẢNG CHẤM CÔNG BÉ YÊU — app.js v3.6.3
 // =============================================
 
-const CURRENT_APP_VERSION = '3.6.2';
+const CURRENT_APP_VERSION = '3.6.3';
 if (localStorage.getItem('app_v') !== CURRENT_APP_VERSION) {
   localStorage.setItem('app_v', CURRENT_APP_VERSION);
   if ('caches' in window) {
