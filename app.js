@@ -1,6 +1,14 @@
 // =============================================
-// BẢNG CHẤM CÔNG BÉ YÊU — app.js v3
+// BẢNG CHẤM CÔNG BÉ YÊU — app.js v3.6.2
 // =============================================
+
+const CURRENT_APP_VERSION = '3.6.2';
+if (localStorage.getItem('app_v') !== CURRENT_APP_VERSION) {
+  localStorage.setItem('app_v', CURRENT_APP_VERSION);
+  if ('caches' in window) {
+    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))));
+  }
+}
 
 // ── SERVICE WORKER REGISTRATION (PWA Auto-Update Seamlessly) ──
 if ('serviceWorker' in navigator) {

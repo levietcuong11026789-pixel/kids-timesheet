@@ -1,6 +1,6 @@
 // ── SERVICE WORKER — kids-timesheet ─────────────
 // ⬆️ MỖI KHI CẬP NHẬT APP, CHỈ CẦN ĐỔI SỐ VERSION NÀY
-const APP_VERSION = '3.6.1';
+const APP_VERSION = '3.6.2';
 const CACHE_NAME = `kids-v${APP_VERSION}`;
 
 const ASSETS = [
