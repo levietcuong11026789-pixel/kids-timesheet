@@ -1,9 +1,61 @@
 // =============================================
-// BẢNG CHẤM CÔNG BÉ YÊU — app.js v2
+// BẢNG CHẤM CÔNG BÉ YÊU — app.js v3
 // =============================================
+
+// ── SERVICE WORKER REGISTRATION (PWA Auto-Update) ──
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // Kiểm tra update ngay khi load và mỗi 30 giây
+    reg.update();
+    setInterval(() => reg.update(), 30000);
+
+    // ✅ Phát hiện SW mới được tải về (installing)
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      if (!newWorker) return;
+      newWorker.addEventListener('statechange', () => {
+        // SW mới đã installed (waiting) → báo người dùng
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          showUpdateBanner();
+        }
+      });
+    });
+  }).catch(() => {});
+
+  // ✅ Khi SW đổi (sau skipWaiting) → reload để áp dụng bản mới
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) { refreshing = true; window.location.reload(); }
+  });
 }
+
+function showUpdateBanner() {
+  if (document.getElementById('update-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  banner.className = 'update-banner';
+  banner.innerHTML = `
+    <div class="update-banner-content">
+      <span>🆕 Có bản cập nhật mới!</span>
+      <div class="update-banner-btns">
+        <button class="update-btn-ok" onclick="applyUpdate()">⬆️ Cập nhật ngay</button>
+        <button class="update-btn-skip" onclick="document.getElementById('update-banner').remove()">Bỏ qua</button>
+      </div>
+    </div>`;
+  document.body.appendChild(banner);
+  requestAnimationFrame(() => banner.classList.add('update-banner-show'));
+}
+
+function applyUpdate() {
+  navigator.serviceWorker.getRegistration().then(reg => {
+    if (reg && reg.waiting) {
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    } else {
+      window.location.reload();
+    }
+  });
+}
+
 
 
 const REWARDS = {
@@ -49,7 +101,62 @@ let db, currentPin = '', selectedSubject = 'Toán', selectedScore = null;
 let readingPages = 5, customAmount = 2000;
 let todayTasks = {}, parentOpen = false, openingBalance = 39000;
 let currentKid = 'be1';
+let parentSelectedYear = new Date().getFullYear();
+let parentSelectedMonth = new Date().getMonth();
 function kp(p) { return 'kids/' + currentKid + '/' + p; }
+
+async function fetchAllPendingTasks() {
+  const snap = await db.ref(kp('tasks')).get();
+  const allDays = snap.val() || {};
+  const pending = [];
+  Object.entries(allDays).forEach(([dateKey, dayTasks]) => {
+    if (dayTasks && typeof dayTasks === 'object') {
+      Object.entries(dayTasks).forEach(([id, t]) => {
+        if (t && t.status === 'pending') {
+          pending.push({ id, dateKey, ...t });
+        }
+      });
+    }
+  });
+  pending.sort((a,b) => {
+    if (a.dateKey !== b.dateKey) return b.dateKey.localeCompare(a.dateKey);
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+  return pending;
+}
+
+function rowHTMLParentPending(task) {
+  const dateKey = task.dateKey;
+  const [y, m, d] = dateKey.split('-');
+  const isToday = dateKey === todayKey();
+  const dateTag = isToday ? 'Hôm nay' : `Ngày ${parseInt(d)}/${parseInt(m)}`;
+  const btns = buildApproveBtnsForDate(task, dateKey);
+  return `<div class="task-row">
+    <div class="task-row-icon">${task.icon}</div>
+    <div class="task-row-info">
+      <div class="task-row-name">${task.label} <span class="pending-date-tag">${dateTag}</span></div>
+      ${task.subLabel ? `<div class="task-row-sub">${task.subLabel}</div>` : ''}
+    </div>
+    ${btns}
+  </div>`;
+}
+
+function buildApproveBtnsForDate(task, dateKey) {
+  const isCustom = task.type === 'custom';
+  if (isCustom) {
+    return `<div class="approve-area">
+      <input type="number" class="amount-edit" id="p-amt-${task.id}" value="${task.value}" step="500" title="Chỉnh số tiền">
+      <div class="approve-btns">
+        <button class="btn-approve" onclick="approveTaskForDate('${task.id}', '${dateKey}', true)">✅</button>
+        <button class="btn-reject"  onclick="rejectTaskForDate('${task.id}', '${dateKey}')">❌</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="approve-btns">
+    <button class="btn-approve" onclick="approveTaskForDate('${task.id}', '${dateKey}', false)">✅</button>
+    <button class="btn-reject"  onclick="rejectTaskForDate('${task.id}', '${dateKey}')">❌</button>
+  </div>`;
+}
 
 // ── INIT ───────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -126,6 +233,7 @@ async function initApp() {
   });
 
   await loadTaskConfig();
+  setupDragReorder();
   hide('loading-screen'); show('app');
 }
 
@@ -360,41 +468,208 @@ async function pinConfirm() {
   if(currentPin===(snap.val()||'1234')){ closePinModal(); openParentView(); }
   else { show('pin-err'); currentPin=''; updatePinDots(); setTimeout(()=>hide('pin-err'),2000); }
 }
-function openParentView() { parentOpen=true; renderParentView(); show('parent-view'); }
-function closeParentView() { parentOpen=false; hide('parent-view'); }
+function openParentView() {
+  parentOpen = true;
+  const now = new Date();
+  parentSelectedYear = now.getFullYear();
+  parentSelectedMonth = now.getMonth();
+  renderParentView();
+  show('parent-view');
+}
+function closeParentView() { parentOpen = false; hide('parent-view'); }
+
+function changeParentMonth(delta) {
+  parentSelectedMonth += delta;
+  if (parentSelectedMonth < 0) { parentSelectedMonth = 11; parentSelectedYear--; }
+  if (parentSelectedMonth > 11) { parentSelectedMonth = 0; parentSelectedYear++; }
+  renderMonthlyBreakdown();
+}
 
 async function renderParentView() {
-  const pending=Object.entries(todayTasks).filter(([,t])=>t.status==='pending').map(([id,t])=>({id,...t}));
-  const pEl=document.getElementById('parent-pending-list');
-  pEl.innerHTML=pending.length ? pending.map(t=>rowHTML(t,true)).join('') : '<div class="empty-msg">Không có gì cần duyệt ✨</div>';
+  const pending = await fetchAllPendingTasks();
+  const pEl = document.getElementById('parent-pending-list');
+  pEl.innerHTML = pending.length
+    ? pending.map(t => rowHTMLParentPending(t)).join('')
+    : '<div class="empty-msg">Không có gì cần duyệt ✨</div>';
 
-  let earned=0, deducted=0;
-  Object.values(todayTasks).forEach(t=>{
-    if(t.status==='approved'){if(t.value>=0)earned+=t.value; else deducted+=t.value;}
+  let earned = 0, deducted = 0;
+  Object.values(todayTasks).forEach(t => {
+    if (t.status === 'approved') { if (t.value >= 0) earned += t.value; else deducted += t.value; }
   });
-  const tot=earned+deducted;
-  document.getElementById('parent-earned').textContent=fmtAbs(earned);
-  document.getElementById('parent-deducted').textContent=fmtAbs(deducted);
-  const tEl=document.getElementById('parent-today-total');
-  tEl.textContent=fmt(tot); tEl.style.color=tot>=0?'var(--green)':'var(--red)';
+  const tot = earned + deducted;
+  document.getElementById('parent-earned').textContent = fmtAbs(earned);
+  document.getElementById('parent-deducted').textContent = fmtAbs(deducted);
+  const tEl = document.getElementById('parent-today-total');
+  tEl.textContent = fmt(tot); tEl.style.color = tot >= 0 ? 'var(--green)' : 'var(--red)';
 
   await renderMonthlyBreakdown();
+  await loadPaymentHistory();
 }
 
 async function renderMonthlyBreakdown() {
-  const snap=await db.ref(kp('tasks')).orderByKey().startAt(monthPrefix()).endAt(monthPrefix()+'\uf8ff').get();
-  const data=snap.val()||{};
-  let monthTotal=0;
-  const rows=Object.entries(data).sort(([a],[b])=>b.localeCompare(a)).map(([dk,dayTasks])=>{
-    let d=0; Object.values(dayTasks).forEach(t=>{if(t.status==='approved')d+=t.value;});
-    monthTotal+=d;
-    const [,,dd]=dk.split('-');
-    return `<div class="day-row"><span class="day-row-date">Ngày ${parseInt(dd)}</span><span class="day-row-val ${d>=0?'pos':'neg'}">${fmt(d)}</span></div>`;
+  const prefix = `${parentSelectedYear}-${String(parentSelectedMonth + 1).padStart(2, '0')}`;
+  const labelEl = document.getElementById('parent-month-label');
+  if (labelEl) labelEl.textContent = `Tháng ${parentSelectedMonth + 1}/${parentSelectedYear}`;
+
+  const snap = await db.ref(kp('tasks')).orderByKey()
+    .startAt(prefix).endAt(prefix + '\uf8ff').get();
+  const data = snap.val() || {};
+  let monthTotal = 0;
+  const rows = Object.entries(data).sort(([a],[b]) => b.localeCompare(a)).map(([dk, dayTasks]) => {
+    let d = 0, pendingCount = 0;
+    Object.values(dayTasks).forEach(t => {
+      if (t.status === 'approved') d += t.value;
+      if (t.status === 'pending') pendingCount++;
+    });
+    monthTotal += d;
+    const [,,dd] = dk.split('-');
+    const pendingBadge = pendingCount > 0
+      ? `<span class="pending-badge">⏳ ${pendingCount} chờ duyệt</span>`
+      : '';
+    return `<div class="day-row day-row-clickable${pendingCount > 0 ? ' has-pending' : ''}" onclick="openParentDayDetail('${dk}')">
+      <span class="day-row-date">Ngày ${parseInt(dd)}</span>
+      <div class="day-row-right">
+        ${pendingBadge}
+        <span class="day-row-val ${d >= 0 ? 'pos' : 'neg'}">${fmt(d)}</span>
+      </div>
+    </div>`;
   });
-  document.getElementById('monthly-list').innerHTML=rows.join('')||'<div class="empty-msg">Chưa có dữ liệu</div>';
-  const mEl=document.getElementById('parent-month-total');
-  mEl.textContent=fmt(monthTotal); mEl.style.color=monthTotal>=0?'var(--green)':'var(--red)';
-  document.getElementById('month-amount').textContent=monthTotal.toLocaleString('vi-VN')+' đ';
+  document.getElementById('monthly-list').innerHTML = rows.join('') || '<div class="empty-msg">Chưa có dữ liệu tháng này</div>';
+  const mEl = document.getElementById('parent-month-total');
+  mEl.textContent = fmt(monthTotal); mEl.style.color = monthTotal >= 0 ? 'var(--green)' : 'var(--red)';
+  const totLabelEl = document.getElementById('parent-month-total-label');
+  if (totLabelEl) totLabelEl.textContent = `Tổng tháng ${parentSelectedMonth + 1}/${parentSelectedYear}`;
+}
+
+// ── PARENT DAY DETAIL MODAL ────────────────────
+let parentDayDetailKey = null;
+
+async function openParentDayDetail(dateKey) {
+  parentDayDetailKey = dateKey;
+  const [y, m, d] = dateKey.split('-');
+  document.getElementById('pday-date-title').textContent = `📋 Ngày ${parseInt(d)} tháng ${parseInt(m)} năm ${y}`;
+  await renderParentDayDetail(dateKey);
+  show('parent-day-modal');
+}
+
+function closeParentDayModal() {
+  hide('parent-day-modal');
+  parentDayDetailKey = null;
+}
+
+async function renderParentDayDetail(dateKey) {
+  const snap = await db.ref(kp(`tasks/${dateKey}`)).get();
+  const data = snap.val() || {};
+  const tasks = Object.entries(data).map(([id, t]) => ({ id, ...t }));
+
+  const pending  = tasks.filter(t => t.status === 'pending');
+  const approved = tasks.filter(t => t.status === 'approved');
+  const rejected = tasks.filter(t => t.status === 'rejected');
+
+  let net = approved.reduce((s, t) => s + t.value, 0);
+
+  // Summary header
+  const isToday = dateKey === todayKey();
+  document.getElementById('pday-summary').innerHTML = `
+    <div class="pday-stat-pill ${pending.length>0?'has-pending':''}">
+      <span>⏳ Chờ</span><strong>${pending.length}</strong>
+    </div>
+    <div class="pday-stat-pill">
+      <span>✅ Duyệt</span><strong class="green">${approved.length}</strong>
+    </div>
+    <div class="pday-stat-pill">
+      <span>❌ Từ chối</span><strong class="red">${rejected.length}</strong>
+    </div>
+  `;
+
+  let html = '';
+
+  // Pending section with approve/reject buttons
+  if (pending.length) {
+    html += `<div class="det-section-label">⏳ Chờ duyệt (${pending.length})</div>`;
+    pending.forEach(t => {
+      const isCustom = t.type === 'custom';
+      const valStr = t.value >= 0
+        ? `+${t.value.toLocaleString('vi-VN')}đ`
+        : `−${Math.abs(t.value).toLocaleString('vi-VN')}đ`;
+      html += `<div class="det-task-row pday-pending-row" id="pday-row-${t.id}">
+        <div class="det-task-left">
+          <span class="det-task-name">${t.icon} ${t.label}</span>
+          ${t.subLabel ? `<br><small class="det-sub">${t.subLabel}</small>` : ''}
+        </div>
+        <div class="pday-approve-area">
+          ${isCustom ? `<input type="number" class="amount-edit" id="pday-amt-${t.id}" value="${t.value}" step="500" title="Chỉnh số tiền">` : `<span class="det-task-val ${t.value>=0?'green':'red'}">${valStr}</span>`}
+          <div class="approve-btns">
+            <button class="btn-approve" onclick="approveTaskForDate('${t.id}','${dateKey}',${isCustom})">✅</button>
+            <button class="btn-reject"  onclick="rejectTaskForDate('${t.id}','${dateKey}')">❌</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+  // Approved section
+  if (approved.length) {
+    html += `<div class="det-section-label">✅ Đã duyệt</div>`;
+    approved.forEach(t => {
+      const cls = t.value >= 0 ? 'green' : 'red';
+      const valStr = t.value >= 0 ? `+${t.value.toLocaleString('vi-VN')}đ` : `−${Math.abs(t.value).toLocaleString('vi-VN')}đ`;
+      html += `<div class="det-task-row">
+        <span class="det-task-left"><span class="det-task-name">${t.icon} ${t.label}</span>${t.subLabel?`<br><small class="det-sub">${t.subLabel}</small>`:''}</span>
+        <span class="det-task-val ${cls}">${valStr}</span>
+      </div>`;
+    });
+  }
+
+  // Rejected section
+  if (rejected.length) {
+    html += `<div class="det-section-label">❌ Đã từ chối</div>`;
+    rejected.forEach(t => {
+      html += `<div class="det-task-row" style="opacity:.55">
+        <span class="det-task-left"><span class="det-task-name">${t.icon} ${t.label}</span>${t.subLabel?`<br><small class="det-sub">${t.subLabel}</small>`:''}</span>
+        <span class="det-task-val" style="color:var(--text-dim);text-decoration:line-through">${t.value>=0?'+':'−'}${Math.abs(t.value).toLocaleString('vi-VN')}đ</span>
+      </div>`;
+    });
+  }
+
+  if (!tasks.length) {
+    html = '<div class="empty-msg" style="padding:24px 0">Chưa có hoạt động nào 📝</div>';
+  }
+
+  // Total row
+  const totalCls = net >= 0 ? 'green' : 'red';
+  html += `<div class="det-total-row">
+    <span>Tổng thu nhập ngày này:</span>
+    <span class="${totalCls} fw">${net>=0?'+':'−'}${Math.abs(net).toLocaleString('vi-VN')} đ</span>
+  </div>`;
+
+  document.getElementById('pday-task-list').innerHTML = html;
+}
+
+async function approveTaskForDate(id, dateKey, isCustom) {
+  const snap = await db.ref(kp(`tasks/${dateKey}/${id}`)).get();
+  const task = snap.val();
+  if (!task || task.status !== 'pending') return;
+
+  let finalValue = task.value;
+  if (isCustom) {
+    const inp = document.getElementById(`p-amt-${id}`) || document.getElementById(`pday-amt-${id}`) || document.getElementById(`cal-amt-${id}`) || document.getElementById(`amt-${id}`);
+    if (inp) finalValue = parseInt(inp.value) || task.value;
+    await db.ref(kp(`tasks/${dateKey}/${id}/value`)).set(finalValue);
+  }
+  await db.ref(kp(`tasks/${dateKey}/${id}/status`)).set('approved');
+  await db.ref(kp('settings/totalEarned')).transaction(c => (c||0) + finalValue);
+
+  playSound('approve'); showToast('✅ Đã duyệt! Bé được thưởng 🎉');
+  if (parentDayDetailKey === dateKey) await renderParentDayDetail(dateKey);
+  if (parentOpen) await renderParentView();
+}
+
+async function rejectTaskForDate(id, dateKey) {
+  await db.ref(kp(`tasks/${dateKey}/${id}/status`)).set('rejected');
+  playSound('reject'); showToast('❌ Đã từ chối nhiệm vụ này');
+  if (parentDayDetailKey === dateKey) await renderParentDayDetail(dateKey);
+  if (parentOpen) await renderParentView();
 }
 
 async function approveTask(id, isCustom) {
@@ -441,6 +716,19 @@ function showToast(msg){
   el.textContent=msg; el.classList.remove('hidden');
   clearTimeout(el._t); el._t=setTimeout(()=>el.classList.add('hidden'),3000);
 }
+
+// ── CONFIRM MODAL ──────────────────────────────
+function showConfirmModal(title, body, confirmLabel, onConfirm) {
+  document.getElementById('confirm-title').textContent   = title;
+  document.getElementById('confirm-body').textContent    = body;
+  document.getElementById('confirm-ok-btn').textContent  = confirmLabel;
+  document.getElementById('confirm-ok-btn').onclick = () => {
+    hide('confirm-modal');
+    onConfirm();
+  };
+  show('confirm-modal');
+}
+function closeConfirmModal() { hide('confirm-modal'); }
 // ── CHANGE PIN MODAL ──────────────────────────
 // Step: 'old' → 'new' → 'confirm'
 let chpinStep = 'old', chpinBuf = '', chpinNewVal = '';
@@ -820,28 +1108,173 @@ async function showDayDetail(dateKey) {
   const snap = await db.ref(kp(`tasks/${dateKey}`)).get();
   const data = snap.val() || {};
   const [y, m, d] = dateKey.split('-');
-  document.getElementById('cal-detail-title').textContent = `📋 Ngày ${parseInt(d)}/${parseInt(m)}`;
+  const isFuture = new Date(parseInt(y), parseInt(m)-1, parseInt(d)) > new Date();
 
-  const tasks = Object.values(data);
+  // Populate the dedicated detail modal
+  document.getElementById('cal-det-date').textContent = `📋 Ngày ${parseInt(d)} tháng ${parseInt(m)} năm ${y}`;
+
+  const tasks = Object.entries(data).map(([id, t]) => ({ id, ...t }));
+  let bodyHtml = '';
   if (!tasks.length) {
-    document.getElementById('cal-detail-list').innerHTML = '<div class="empty-msg">Không có hoạt động nào</div>';
+    bodyHtml = '<div class="empty-msg" style="padding:24px 0">Chưa có hoạt động nào 📝</div>';
   } else {
     let net = 0;
-    const rows = tasks.map(t => {
-      const cls = t.status==='approved' ? (t.value>=0?'green':'red') : (t.status==='rejected'?'red':'');
-      const badge = t.status==='approved' ? '✅' : t.status==='rejected' ? '❌' : '⏳';
-      if (t.status==='approved') net += t.value;
-      const valStr = t.value >= 0 ? `+${t.value.toLocaleString('vi-VN')}đ` : `−${Math.abs(t.value).toLocaleString('vi-VN')}đ`;
-      return `<div class="cal-task-row">
-        <span>${t.icon} ${t.label}</span>
-        <span>${badge} <b class="${cls}">${valStr}</b></span>
-      </div>`;
-    }).join('');
+    const approved = tasks.filter(t => t.status === 'approved');
+    const pending  = tasks.filter(t => t.status === 'pending');
+    const rejected = tasks.filter(t => t.status === 'rejected');
+
+    const makeRows = (list, sectionLabel, isPendingSection) => {
+      if (!list.length) return '';
+      const rows = list.map(t => {
+        const cls = t.value >= 0 ? 'green' : 'red';
+        const valStr = t.value >= 0 ? `+${t.value.toLocaleString('vi-VN')}đ` : `−${Math.abs(t.value).toLocaleString('vi-VN')}đ`;
+        let rightSide = `<span class="det-task-val ${cls}">${valStr}</span>`;
+        if (isPendingSection) {
+          const isCustom = t.type === 'custom';
+          rightSide = `<div class="pday-approve-area">
+            ${isCustom ? `<input type="number" class="amount-edit" id="cal-amt-${t.id}" value="${t.value}" step="500" title="Chỉnh số tiền">` : `<span class="det-task-val ${cls}">${valStr}</span>`}
+            <div class="approve-btns">
+              <button class="btn-approve" onclick="approveTaskFromCal('${t.id}','${dateKey}',${isCustom})">✅</button>
+              <button class="btn-reject"  onclick="rejectTaskFromCal('${t.id}','${dateKey}')">❌</button>
+            </div>
+          </div>`;
+        }
+        return `<div class="det-task-row">
+          <span class="det-task-left">${t.icon} <span class="det-task-name">${t.label}</span>${t.subLabel ? `<br><small class="det-sub">${t.subLabel}</small>` : ''}</span>
+          ${rightSide}
+        </div>`;
+      }).join('');
+      return `<div class="det-section-label">${sectionLabel}</div>${rows}`;
+    };
+
+    approved.forEach(t => { net += t.value; });
     const totalCls = net >= 0 ? 'green' : 'red';
-    document.getElementById('cal-detail-list').innerHTML =
-      rows + `<div class="cal-net-row"><b>Tổng ngày:</b> <b class="${totalCls}">${net>=0?'+':'−'}${Math.abs(net).toLocaleString('vi-VN')} đ</b></div>`;
+
+    bodyHtml =
+      makeRows(pending,  '⏳ Chờ duyệt', true) +
+      makeRows(approved, '✅ Đã được duyệt', false) +
+      makeRows(rejected, '❌ Bị từ chối', false) +
+      `<div class="det-total-row">
+        <span>Tổng thu nhập:</span>
+        <span class="${totalCls} fw">${net>=0?'+':'−'}${Math.abs(net).toLocaleString('vi-VN')} đ</span>
+      </div>`;
   }
-  show('cal-day-detail');
+
+  document.getElementById('cal-det-body').innerHTML = bodyHtml;
+
+  // Show/hide add button
+  const addBtn = document.getElementById('cal-det-add-btn');
+  addBtn.classList.toggle('hidden', isFuture);
+  addBtn.onclick = () => { closeCalDetModal(); openCalAddModal(dateKey); };
+
+  show('cal-det-modal');
+}
+
+async function approveTaskFromCal(id, dateKey, isCustom) {
+  await approveTaskForDate(id, dateKey, isCustom);
+  await showDayDetail(dateKey);
+  if (typeof renderCal === 'function') renderCal();
+}
+
+async function rejectTaskFromCal(id, dateKey) {
+  await rejectTaskForDate(id, dateKey);
+  await showDayDetail(dateKey);
+  if (typeof renderCal === 'function') renderCal();
+}
+function closeCalDetModal() { hide('cal-det-modal'); }
+
+// Keep old cal-day-detail hidden (no longer used)
+function _unusedCalDayDetail() {}
+
+// ── CAL ADD TASK MODAL ──────────────────────────
+let calAddDateKey = null;
+let calAddSelectedTask = null;
+let calAddCustomAmt = 2000;
+
+function openCalAddModal(dateKey) {
+  calAddDateKey = dateKey;
+  calAddSelectedTask = null;
+  calAddCustomAmt = 2000;
+  const [y, m, d] = dateKey.split('-');
+  document.getElementById('cal-add-date-label').textContent = `Ngày ${parseInt(d)}/${parseInt(m)}/${y}`;
+  // Populate task list
+  const listEl = document.getElementById('cal-add-task-list');
+  const allTasks = [
+    ...taskConfig,
+    { id:'score',   icon:'🏆', label:'Điểm kiểm tra', value: 3000 },
+    { id:'custom',  icon:'✍️', label:'Việc khác (tự nhập)', value: 2000 }
+  ];
+  listEl.innerHTML = allTasks.map(t =>
+    `<button class="cal-task-pill" data-id="${t.id}" data-label="${t.label}" data-icon="${t.icon}" data-value="${t.value}" onclick="selectCalAddTask(this)">
+       ${t.icon} ${t.label} <span class="cpill-val">+${t.value.toLocaleString('vi-VN')}đ</span>
+     </button>`
+  ).join('');
+  document.getElementById('cal-add-custom-row').classList.add('hidden');
+  document.getElementById('cal-add-custom-name').value = '';
+  document.getElementById('cal-add-preview').textContent = 'Chọn công việc bên trên';
+  document.getElementById('cal-add-preview').style.color = 'var(--text-dim)';
+  show('cal-add-modal');
+}
+function closeCalAddModal() { hide('cal-add-modal'); }
+
+function selectCalAddTask(el) {
+  document.querySelectorAll('#cal-add-task-list .cal-task-pill').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  calAddSelectedTask = {
+    id:    el.dataset.id,
+    label: el.dataset.label,
+    icon:  el.dataset.icon,
+    value: parseInt(el.dataset.value)
+  };
+  const isCustom = calAddSelectedTask.id === 'custom';
+  document.getElementById('cal-add-custom-row').classList.toggle('hidden', !isCustom);
+  updateCalAddPreview();
+}
+
+function changeCalAddAmt(d) {
+  calAddCustomAmt = Math.max(500, calAddCustomAmt + d);
+  document.getElementById('cal-add-custom-amount').textContent = calAddCustomAmt.toLocaleString('vi-VN');
+  updateCalAddPreview();
+}
+
+function updateCalAddPreview() {
+  if (!calAddSelectedTask) return;
+  const prev = document.getElementById('cal-add-preview');
+  if (calAddSelectedTask.id === 'custom') {
+    prev.innerHTML = `📝 Đề xuất: <b>${calAddCustomAmt.toLocaleString('vi-VN')} đ</b>`;
+    prev.style.color = 'var(--gold)';
+  } else {
+    const val = calAddSelectedTask.value;
+    prev.innerHTML = val >= 0
+      ? `🎉 Thưởng: <b class="green">+${val.toLocaleString('vi-VN')} đ</b>`
+      : `⚠️ Trừ: <b class="red">−${Math.abs(val).toLocaleString('vi-VN')} đ</b>`;
+    prev.style.color = val >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+}
+
+async function submitCalAddTask() {
+  if (!calAddSelectedTask || !calAddDateKey) { showToast('⚠️ Chọn công việc trước!'); return; }
+  let label = calAddSelectedTask.label;
+  let value = calAddSelectedTask.value;
+  let icon  = calAddSelectedTask.icon;
+  if (calAddSelectedTask.id === 'custom') {
+    const name = document.getElementById('cal-add-custom-name').value.trim();
+    if (!name) { showToast('⚠️ Nhập tên công việc!'); return; }
+    label = name; value = calAddCustomAmt;
+  }
+  await db.ref(kp(`tasks/${calAddDateKey}`)).push({
+    type: calAddSelectedTask.id === 'custom' ? 'custom' : 'simple',
+    taskId: calAddSelectedTask.id,
+    label, icon, value,
+    status: 'pending', createdAt: Date.now(),
+    retroEntry: true
+  });
+  closeCalAddModal();
+  // Refresh the day detail
+  showDayDetail(calAddDateKey);
+  renderCal();
+  spawnCoin(); playSound('submit');
+  showToast(`📤 Đã ghi việc "${label}" vào ngày ${calAddDateKey.split('-').slice(1).reverse().join('/')}`);
 }
 
 
@@ -864,7 +1297,8 @@ const DEFAULT_CFG = {
     { id:'clean_room', icon:'🛏️', label:'Dọn phòng', value:1000 },
     { id:'english', icon:'📖', label:'Học Tiếng Anh', value:1000 },
     { id:'math', icon:'✏️', label:'Học Toán', value:1000 },
-    { id:'listen', icon:'🎧', label:'Nghe Tiếng Anh', value:1000 }
+    { id:'listen', icon:'🎧', label:'Nghe Tiếng Anh', value:1000 },
+    { id:'school', icon:'🏫', label:'Đi học', value:5000 }
   ]
 };
 
@@ -873,29 +1307,237 @@ let tmpTaskConfig = [];
 
 async function loadTaskConfig() {
   const snap = await db.ref(kp('config/tasks')).get();
-  taskConfig = snap.val() || DEFAULT_CFG[currentKid] || [];
-  if (!snap.val()) await db.ref(kp('config/tasks')).set(taskConfig);
+  const defaults = DEFAULT_CFG[currentKid] || [];
+  if (!snap.val()) {
+    taskConfig = defaults;
+    await db.ref(kp('config/tasks')).set(taskConfig);
+  } else {
+    taskConfig = snap.val();
+    // Auto-merge: thêm task mới từ DEFAULT_CFG nếu chưa có
+    const existingIds = taskConfig.map(t => t.id);
+    const missing = defaults.filter(d => !existingIds.includes(d.id));
+    if (missing.length) {
+      taskConfig = [...taskConfig, ...missing];
+      await db.ref(kp('config/tasks')).set(taskConfig);
+    }
+  }
   renderTaskGrid();
 }
 
 function renderTaskGrid() {
+  if (_dragCtx && _dragCtx.active) return;
   const grid = document.getElementById('task-grid');
   if (!grid) return;
-  grid.innerHTML = taskConfig.map((t, i) => {
-    const done = Object.values(todayTasks).some(
-      x => x.taskId === t.id && (x.status === 'pending' || x.status === 'approved'));
-    const badge = done ? (Object.values(todayTasks).some(
-      x => x.taskId === t.id && x.status === 'approved') ? '✅' : '⏳') : '';
-    return `<div class="task-card ${done ? (badge === '✅' ? 'approved' : 'pending') : ''}" onclick="submitSimpleTask('${t.id}')">
+
+  // Dynamic configurable tasks
+  let html = taskConfig.map((t, i) => {
+    const pendingEntry = Object.entries(todayTasks).find(
+      ([,x]) => x.taskId === t.id && x.status === 'pending');
+    const approvedEntry = Object.entries(todayTasks).find(
+      ([,x]) => x.taskId === t.id && x.status === 'approved');
+    const isPending  = !!pendingEntry;
+    const isApproved = !!approvedEntry;
+    const badge = isApproved ? '✅' : isPending ? '⏳' : '';
+    const stateClass = isApproved ? 'approved' : isPending ? 'pending' : '';
+    const clickFn = isApproved
+      ? `showToast('✅ Việc này đã được Ba/Mẹ duyệt!')`
+      : isPending
+        ? `cancelPendingTask('${pendingEntry[0]}', '${t.label}')`
+        : `submitSimpleTask('${t.id}')`;
+    return `<div class="task-card ${stateClass}" data-idx="${i}" onclick="${clickFn}">
       <div class="tc-icon">${t.icon}</div>
       <div class="tc-name">${t.label}</div>
       <div class="tc-reward green">+${t.value.toLocaleString('vi-VN')} đ</div>
       ${badge ? `<div class="tc-badge">${badge}</div>` : ''}
+      ${isPending ? `<div class="tc-undo-hint">Nhấn để chọn lại</div>` : ''}
     </div>`;
   }).join('');
+
+  // Fixed cards (not draggable — no data-idx)
+  html += `<div class="task-card" onclick="openScoreModal()">
+      <div class="tc-icon">🏆</div>
+      <div class="tc-name">Điểm KT</div>
+      <div class="tc-desc">Nhập điểm nhiều lần/ngày</div>
+      <div class="tc-reward green">+1k ~ +5k đ</div>
+    </div>
+    <div class="task-card task-custom" onclick="openCustomModal()">
+      <div class="tc-icon">✍️</div>
+      <div class="tc-name">Việc khác</div>
+      <div class="tc-desc">Đề xuất việc + số tiền</div>
+      <div class="tc-reward primary">Tự đề xuất</div>
+    </div>
+    <div class="task-card task-penalty" onclick="openPenaltyModal()">
+      <div class="tc-icon">⚠️</div>
+      <div class="tc-name">Phạt</div>
+      <div class="tc-desc">Ba/Mẹ trừ tiền</div>
+      <div class="tc-reward red">Trừ tiền</div>
+    </div>`;
+
+  grid.innerHTML = html;
+}
+
+// ── DRAG & DROP REORDER (main task grid) ────────
+let _dragCtx = null;
+let _dragJustEnded = false;
+let _dragSetup = false;
+
+function setupDragReorder() {
+  if (_dragSetup) return;
+  const grid = document.getElementById('task-grid');
+  if (!grid) return;
+  _dragSetup = true;
+  grid.addEventListener('touchstart', onGridPointerDown, { passive: true });
+  grid.addEventListener('mousedown', onGridPointerDown);
+}
+
+function onGridPointerDown(e) {
+  // Only drag cards with data-idx (configurable tasks, not fixed ones)
+  const card = e.target.closest('.task-card[data-idx]');
+  if (!card) return;
+  const isTouch = e.type === 'touchstart';
+  const p = isTouch ? e.touches[0] : e;
+  cancelDrag();
+
+  const ctx = {
+    card, idx: parseInt(card.dataset.idx),
+    startX: p.clientX, startY: p.clientY, isTouch,
+    active: false, dropIdx: parseInt(card.dataset.idx)
+  };
+  _dragCtx = ctx;
+
+  // Move & end handlers (scoped per gesture)
+  function onMove(ev) {
+    const pt = ev.touches ? ev.touches[0] : ev;
+    if (!_dragCtx || _dragCtx !== ctx) return;
+    if (!_dragCtx.active) {
+      if (Math.abs(pt.clientX - ctx.startX) > 8 || Math.abs(pt.clientY - ctx.startY) > 8) {
+        cancelDrag();
+      }
+      return;
+    }
+    ev.preventDefault();
+    // Move ghost
+    ctx.ghost.style.left = (pt.clientX - ctx.offX) + 'px';
+    ctx.ghost.style.top  = (pt.clientY - ctx.offY) + 'px';
+    // Find drop target: prefer card under cursor, fallback to closest
+    let closest = ctx.idx, minD = Infinity;
+    document.querySelectorAll('#task-grid .task-card[data-idx]').forEach(c => {
+      const ci = parseInt(c.dataset.idx);
+      if (ci === ctx.idx) return;
+      const r = c.getBoundingClientRect();
+      // Check if cursor is inside this card
+      if (pt.clientX >= r.left && pt.clientX <= r.right && pt.clientY >= r.top && pt.clientY <= r.bottom) {
+        closest = ci; minD = 0;
+        return;
+      }
+      // Fallback: closest center
+      const d = Math.hypot(pt.clientX - (r.left + r.width / 2), pt.clientY - (r.top + r.height / 2));
+      if (d < minD) { minD = d; closest = ci; }
+    });
+    if (closest !== ctx.dropIdx) {
+      ctx.dropIdx = closest;
+      document.querySelectorAll('#task-grid .drag-over').forEach(c => c.classList.remove('drag-over'));
+      if (closest !== ctx.idx) {
+        document.querySelector(`#task-grid .task-card[data-idx="${closest}"]`)?.classList.add('drag-over');
+      }
+    }
+  }
+
+  function onEnd(ev) {
+    cleanup();
+    if (_dragCtx && _dragCtx === ctx && ctx.active) {
+      ev.preventDefault();
+      doFinishDrag(ctx);
+    } else {
+      cancelDrag();
+    }
+  }
+
+  function cleanup() {
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onEnd);
+  }
+
+  ctx._cleanup = cleanup;
+  ctx.timer = setTimeout(() => {
+    if (!_dragCtx || _dragCtx !== ctx) return;
+    const rect = card.getBoundingClientRect();
+    if (navigator.vibrate) navigator.vibrate(30);
+    const ghost = card.cloneNode(true);
+    ghost.className = 'task-card drag-ghost';
+    ghost.style.width = rect.width + 'px';
+    ghost.style.height = rect.height + 'px';
+    ghost.style.left = rect.left + 'px';
+    ghost.style.top = rect.top + 'px';
+    document.body.appendChild(ghost);
+    card.classList.add('drag-placeholder');
+    ctx.ghost = ghost;
+    ctx.active = true;
+    ctx.offX = ctx.startX - rect.left;
+    ctx.offY = ctx.startY - rect.top;
+    document.body.style.overflow = 'hidden';
+  }, 400);
+
+  if (isTouch) {
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  } else {
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+  }
+}
+
+async function doFinishDrag(ctx) {
+  const from = ctx.idx, to = ctx.dropIdx;
+  // Cleanup visuals
+  if (ctx.ghost) ctx.ghost.remove();
+  ctx.card.classList.remove('drag-placeholder');
+  document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+  document.body.style.overflow = '';
+  _dragJustEnded = true;
+  setTimeout(() => _dragJustEnded = false, 400);
+  _dragCtx = null;
+
+  if (from !== to) {
+    const item = taskConfig.splice(from, 1)[0];
+    taskConfig.splice(to, 0, item);
+    renderTaskGrid(); // Render immediately with new order
+    await db.ref(kp('config/tasks')).set(taskConfig);
+    if (navigator.vibrate) navigator.vibrate(20);
+    showToast('✅ Đã đổi vị trí!');
+  }
+}
+
+function cancelDrag() {
+  if (!_dragCtx) return;
+  clearTimeout(_dragCtx.timer);
+  if (_dragCtx.ghost) _dragCtx.ghost.remove();
+  if (_dragCtx.card) _dragCtx.card.classList.remove('drag-placeholder');
+  document.querySelectorAll('.drag-over').forEach(c => c.classList.remove('drag-over'));
+  document.body.style.overflow = '';
+  if (_dragCtx._cleanup) _dragCtx._cleanup();
+  _dragCtx = null;
+}
+
+async function cancelPendingTask(firebaseId, label) {
+  if (_dragJustEnded) return;
+  // Show inline confirm overlay instead of native confirm()
+  showConfirmModal(
+    `🔄 Chọn lại "${label}"?`,
+    'Huỷ lần đăng ký này để chọn lại hoặc đổi công việc khác.',
+    '🗑️ Huỷ đăng ký',
+    async () => {
+      await db.ref(kp(`tasks/${todayKey()}/${firebaseId}`)).remove();
+      playSound('reject');
+      showToast(`🔄 Đã huỷ "${label}". Bé có thể chọn lại!`);
+    }
+  );
 }
 
 async function submitSimpleTask(taskId) {
+  if (_dragJustEnded) return;
   const cfg = taskConfig.find(t => t.id === taskId);
   if (!cfg) return;
   const already = Object.values(todayTasks).some(
@@ -936,13 +1578,26 @@ async function submitPenalty() {
 function openTaskManager() { tmpTaskConfig = JSON.parse(JSON.stringify(taskConfig)); renderTaskManagerList(); show('task-manager-modal'); }
 function closeTaskManager() { hide('task-manager-modal'); }
 function renderTaskManagerList() {
+  const len = tmpTaskConfig.length;
   document.getElementById('task-manager-list').innerHTML = tmpTaskConfig.map((t, i) =>
     `<div class="tm-row">
+      <div class="tm-move-btns">
+        <button class="tm-move-btn" onclick="moveTask(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button class="tm-move-btn" onclick="moveTask(${i},1)" ${i === len - 1 ? 'disabled' : ''}>▼</button>
+      </div>
       <span class="tm-info">${t.icon} ${t.label}</span>
       <input type="number" class="tm-val" value="${t.value}" onchange="tmpTaskConfig[${i}].value=parseInt(this.value)||0" inputmode="numeric">
       <button class="btn-small red-btn" onclick="tmpTaskConfig.splice(${i},1);renderTaskManagerList()">🗑️</button>
     </div>`
   ).join('') || '<div class="empty-msg">Chưa có việc nào</div>';
+}
+function moveTask(index, direction) {
+  const newIndex = index + direction;
+  if (newIndex < 0 || newIndex >= tmpTaskConfig.length) return;
+  const temp = tmpTaskConfig[index];
+  tmpTaskConfig[index] = tmpTaskConfig[newIndex];
+  tmpTaskConfig[newIndex] = temp;
+  renderTaskManagerList();
 }
 function addNewTask() {
   const icon = document.getElementById('new-task-icon').value.trim() || '📌';
@@ -962,3 +1617,113 @@ async function saveTaskConfig() {
   closeTaskManager(); renderTaskGrid();
   showToast('✅ Đã lưu cài đặt việc!');
 }
+
+// ── PAY WAGE FEATURE ─────────────────────────────
+let payWageAmount = 0;
+let _currentTotalBalance = 0;
+
+async function openPayWageModal() {
+  // Compute current total balance from Firebase
+  const snap = await db.ref(kp('settings')).get();
+  const s = snap.val() || {};
+  const balance = (s.openingBalance ?? 0) + (s.totalEarned ?? 0);
+  _currentTotalBalance = balance;
+  payWageAmount = Math.max(0, balance); // default: pay all
+
+  document.getElementById('pay-wage-current-balance').textContent =
+    balance.toLocaleString('vi-VN') + ' đ';
+  document.getElementById('pay-wage-amount').textContent =
+    payWageAmount.toLocaleString('vi-VN');
+  document.getElementById('pay-wage-note').value = '';
+  show('pay-wage-modal');
+}
+
+function closePayWageModal() { hide('pay-wage-modal'); }
+
+function changePayWageAmt(delta) {
+  payWageAmount = Math.max(0, payWageAmount + delta);
+  document.getElementById('pay-wage-amount').textContent =
+    payWageAmount.toLocaleString('vi-VN');
+}
+
+function setPayWagePreset(preset) {
+  if (preset === 'all')  payWageAmount = Math.max(0, _currentTotalBalance);
+  if (preset === 'half') payWageAmount = Math.max(0, Math.round(_currentTotalBalance / 2 / 500) * 500);
+  document.getElementById('pay-wage-amount').textContent =
+    payWageAmount.toLocaleString('vi-VN');
+}
+
+async function confirmPayWage() {
+  if (payWageAmount <= 0) { showToast('⚠️ Số tiền phải lớn hơn 0!'); return; }
+
+  const note = document.getElementById('pay-wage-note').value.trim() || 'Thanh toán lương';
+  const now  = new Date();
+  const dateStr = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()}`;
+  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  // Save payment record
+  await db.ref(kp('payments')).push({
+    amount:    payWageAmount,
+    note,
+    paidAt:    now.toISOString(),
+    timestamp: Date.now()
+  });
+
+  // Deduct from totalEarned (or openingBalance as fallback)
+  // Strategy: reduce openingBalance by payment amount so balance drops
+  await db.ref(kp('settings/openingBalance')).transaction(c => (c || 0) - payWageAmount);
+
+  closePayWageModal();
+  playSound('approve');
+
+  // Money fly out effect (reverse)
+  spawnPayment();
+  showToast(`💸 Đã thanh toán ${payWageAmount.toLocaleString('vi-VN')} đ cho bé! 🎉`);
+
+  // Refresh history
+  await loadPaymentHistory();
+}
+
+function spawnPayment() {
+  const layer = document.getElementById('fx-layer');
+  const emojis = ['💸', '💵', '💴', '💳'];
+  for (let i = 0; i < 6; i++) setTimeout(() => {
+    const el = document.createElement('div');
+    el.className = 'coin-fx';
+    el.textContent = emojis[i % emojis.length];
+    el.style.left  = (15 + Math.random() * 70) + 'vw';
+    el.style.top   = (20 + Math.random() * 50) + 'vh';
+    el.style.fontSize = '28px';
+    layer.appendChild(el);
+    setTimeout(() => el.remove(), 1300);
+  }, i * 100);
+}
+
+async function loadPaymentHistory() {
+  const snap = await db.ref(kp('payments')).orderByChild('timestamp').get();
+  const el = document.getElementById('payment-history-list');
+  if (!snap.val()) {
+    el.innerHTML = '<div class="empty-msg">Chưa có lần thanh toán nào</div>';
+    return;
+  }
+
+  const payments = [];
+  snap.forEach(child => payments.push({ id: child.key, ...child.val() }));
+  payments.sort((a, b) => b.timestamp - a.timestamp); // newest first
+
+  el.innerHTML = payments.map(p => {
+    const d = new Date(p.paidAt || p.timestamp);
+    const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+    const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return `<div class="payment-item">
+      <div class="payment-icon">💸</div>
+      <div class="payment-info">
+        <div class="payment-amount">−${p.amount.toLocaleString('vi-VN')} đ</div>
+        <div class="payment-note">${p.note || 'Thanh toán lương'}</div>
+        <div class="payment-date">${dateStr} lúc ${timeStr}</div>
+      </div>
+      <div class="payment-badge">Đã trả</div>
+    </div>`;
+  }).join('');
+}
+

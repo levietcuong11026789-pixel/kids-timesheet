@@ -159,6 +159,22 @@ html, body {
 }
 .task-card:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,.35); }
 .task-card:active { transform: scale(.96); }
+.task-card.drag-ghost {
+  position: fixed !important; z-index: 10000; pointer-events: none;
+  opacity: .92; transform: scale(1.06) rotate(2deg);
+  box-shadow: 0 16px 50px rgba(0,0,0,.55);
+  transition: none; border-color: var(--primary);
+}
+.task-card.drag-placeholder {
+  opacity: .25; border: 2px dashed var(--primary) !important;
+  background: rgba(167,139,250,.08) !important;
+}
+.task-card.drag-over {
+  border-color: var(--green) !important;
+  box-shadow: 0 0 24px rgba(52,211,153,.4) !important;
+  transform: scale(1.04);
+  transition: transform .15s, box-shadow .15s;
+}
 .task-card.wide { grid-column: span 2; }
 .task-card.disabled {
   opacity: .5; cursor: not-allowed; pointer-events: none;
@@ -172,7 +188,7 @@ html, body {
   border-color: var(--green);
   box-shadow: 0 0 16px rgba(52,211,153,.3);
   background: rgba(52,211,153,.07);
-  pointer-events: none; opacity: .8;
+  cursor: default; opacity: .85;
 }
 
 .tc-icon { font-size: 28px; margin-bottom: 6px; }
@@ -486,11 +502,29 @@ html, body {
 .text-input::placeholder { color: var(--text-dim); }
 
 /* ── APPROVE AREA (custom tasks parent view) ── */
+/* ── APPROVE AREA & PARENT MONTH NAV ── */
 .approve-area { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
 .amount-edit {
   width: 90px; background: rgba(251,191,36,.1); border: 1px solid var(--gold);
   border-radius: 8px; padding: 5px 8px; color: var(--gold);
   font-family: inherit; font-size: 14px; font-weight: 700; text-align: center;
+}
+.section-header-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px; flex-wrap: wrap; gap: 8px;
+}
+.parent-month-nav {
+  display: flex; align-items: center; gap: 6px;
+}
+.parent-month-lbl {
+  font-size: 14px; font-weight: 800; color: var(--gold);
+  min-width: 90px; text-align: center;
+}
+.pending-date-tag {
+  display: inline-block; font-size: 11px; font-weight: 800;
+  padding: 2px 7px; border-radius: 12px;
+  background: rgba(251, 191, 36, 0.2); color: var(--gold);
+  border: 1px solid rgba(251, 191, 36, 0.4); margin-left: 6px;
 }
 
 /* ── CALENDAR ── */
@@ -660,11 +694,31 @@ html, body {
 .fw  { font-weight: 800; }
 .dim { color: var(--text-dim); }
 
-/* KID TABS */
-.kid-tabs{display:flex;gap:8px;padding:10px 16px;background:rgba(10,14,26,.6);border-bottom:1px solid rgba(255,255,255,.08)}
-.kid-tab{flex:1;padding:10px 16px;border-radius:50px;background:rgba(255,255,255,.06);border:2px solid transparent;color:rgba(255,255,255,.5);font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s}
-.kid-tab.active{background:linear-gradient(135deg,rgba(139,92,246,.3),rgba(96,165,250,.3));border-color:rgba(139,92,246,.6);color:#fff;box-shadow:0 2px 12px rgba(139,92,246,.3)}
-.kid-tab:hover{background:rgba(255,255,255,.1)}
+/* KID TABS — scrollable so landscape Android can reach both tabs */
+.kid-tabs {
+  display: flex; gap: 8px;
+  padding: 10px 16px;
+  background: rgba(10,14,26,.6);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.kid-tabs::-webkit-scrollbar { display: none; }
+.kid-tab {
+  flex: 1; min-width: 110px;  /* prevent squashing on small landscape */
+  padding: 10px 16px; border-radius: 50px;
+  background: rgba(255,255,255,.06); border: 2px solid transparent;
+  color: rgba(255,255,255,.5); font-size: 15px; font-weight: 800;
+  cursor: pointer; font-family: inherit; transition: all .2s;
+  white-space: nowrap;
+}
+.kid-tab.active {
+  background: linear-gradient(135deg,rgba(139,92,246,.3),rgba(96,165,250,.3));
+  border-color: rgba(139,92,246,.6); color: #fff;
+  box-shadow: 0 2px 12px rgba(139,92,246,.3);
+}
+.kid-tab:hover { background: rgba(255,255,255,.1); }
 
 /* PENALTY */
 .task-penalty{border-color:rgba(239,68,68,.3)!important}
@@ -684,3 +738,270 @@ html, body {
 .green-btn{background:var(--green)!important}
 .add-task-row{display:flex;gap:6px;align-items:center}
 .add-task-row .modal-input{padding:8px;margin:0}
+.tm-move-btns{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.tm-move-btn{width:28px;height:22px;border-radius:6px;background:rgba(167,139,250,.18);border:1px solid rgba(167,139,250,.35);color:var(--primary);font-size:11px;cursor:pointer;font-family:inherit;padding:0;line-height:1;transition:background .15s,transform .1s}
+.tm-move-btn:hover:not(:disabled){background:rgba(167,139,250,.35)}
+.tm-move-btn:active:not(:disabled){transform:scale(.9)}
+.tm-move-btn:disabled{opacity:.25;cursor:not-allowed}
+
+/* ── RE-SELECT HINT on pending task cards ── */
+.tc-undo-hint {
+  font-size: 10px; font-weight: 700;
+  color: var(--gold); opacity: .8;
+  margin-top: 4px; letter-spacing: .3px;
+  animation: pulse-hint 2s ease-in-out infinite;
+}
+@keyframes pulse-hint {
+  0%,100% { opacity: .6; }
+  50%      { opacity: 1; }
+}
+
+/* ── CAL ADD BUTTON in day detail header ── */
+.cal-detail-title {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.cal-add-btn {
+  font-size: 12px; font-weight: 700; padding: 5px 12px;
+  border-radius: 50px; border: 1px solid var(--primary);
+  background: rgba(167,139,250,.18); color: var(--primary);
+  cursor: pointer; font-family: inherit;
+  transition: background .15s, transform .1s;
+}
+.cal-add-btn:hover  { background: rgba(167,139,250,.32); }
+.cal-add-btn:active { transform: scale(.93); }
+
+/* ── CAL ADD TASK LIST ── */
+.cal-add-task-list {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0;
+}
+.cal-task-pill {
+  padding: 8px 14px; border-radius: 50px;
+  background: var(--glass); border: 1px solid var(--glass-b);
+  color: var(--text); font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  transition: background .15s, border-color .15s, transform .1s;
+  display: flex; align-items: center; gap: 6px;
+}
+.cal-task-pill:active { transform: scale(.94); }
+.cal-task-pill.active {
+  background: rgba(167,139,250,.25);
+  border-color: var(--primary); color: var(--primary);
+}
+.cpill-val {
+  font-size: 11px; color: var(--green); font-weight: 800;
+}
+
+/* ── CAL DAY DETAIL MODAL ── */
+.cal-det-box {
+  max-height: 85vh; overflow-y: auto; text-align: left;
+}
+.cal-det-box h2 {
+  font-size: 17px; margin-bottom: 16px; text-align: center;
+}
+.cal-det-body { display: flex; flex-direction: column; gap: 4px; }
+
+.det-section-label {
+  font-size: 12px; font-weight: 800; letter-spacing: .5px;
+  color: var(--text-dim); text-transform: uppercase;
+  padding: 10px 0 4px;
+}
+.det-task-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--glass); border: 1px solid var(--glass-b);
+  border-radius: var(--r-sm); padding: 12px 14px; gap: 10px;
+}
+.det-task-left { flex: 1; font-size: 14px; line-height: 1.4; }
+.det-task-name { font-weight: 700; }
+.det-sub { font-size: 11px; color: var(--text-dim); }
+.det-task-val { font-size: 15px; font-weight: 900; flex-shrink: 0; }
+.det-task-val.green { color: var(--green); }
+.det-task-val.red   { color: var(--red); }
+
+.det-total-row {
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.3);
+  border-radius: var(--r-sm); padding: 14px;
+  font-size: 15px; font-weight: 700; margin-top: 8px;
+}
+
+/* ── PARENT DAY DETAIL — clickable monthly rows ── */
+.day-row-right {
+  display: flex; align-items: center; gap: 8px;
+}
+.day-row-clickable {
+  cursor: pointer;
+  transition: background .18s, border-color .18s, transform .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.day-row-clickable:hover {
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.25);
+}
+.day-row-clickable:active { transform: scale(.98); }
+.day-row.has-pending {
+  border-color: rgba(251,191,36,.45);
+  background: rgba(251,191,36,.07);
+  box-shadow: 0 0 10px rgba(251,191,36,.15);
+}
+.pending-badge {
+  font-size: 11px; font-weight: 800;
+  background: rgba(251,191,36,.2); border: 1px solid rgba(251,191,36,.5);
+  color: var(--gold); padding: 3px 9px; border-radius: 50px;
+  animation: badge-pulse 2.2s ease-in-out infinite;
+  white-space: nowrap;
+}
+@keyframes badge-pulse {
+  0%,100% { opacity: .8; }
+  50%      { opacity: 1; box-shadow: 0 0 8px rgba(251,191,36,.4); }
+}
+
+/* ── PARENT DAY DETAIL MODAL ── */
+.pday-modal-box {
+  max-height: 88vh; overflow-y: auto;
+  text-align: left; padding-bottom: 32px;
+}
+.pday-modal-box h2 {
+  font-size: 17px; margin-bottom: 14px; text-align: center;
+}
+.pday-summary-row {
+  display: flex; gap: 8px; margin-bottom: 16px;
+}
+.pday-stat-pill {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: var(--glass); border: 1px solid var(--glass-b);
+  border-radius: var(--r-sm); padding: 10px 8px;
+  font-size: 11px; color: var(--text-dim); text-align: center;
+}
+.pday-stat-pill strong { font-size: 18px; font-weight: 900; color: var(--text); }
+.pday-stat-pill strong.green { color: var(--green); }
+.pday-stat-pill strong.red   { color: var(--red); }
+.pday-stat-pill.has-pending {
+  border-color: rgba(251,191,36,.5);
+  background: rgba(251,191,36,.1);
+}
+.pday-stat-pill.has-pending strong { color: var(--gold); }
+
+.pday-task-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* Pending rows in pday modal */
+.pday-pending-row {
+  flex-wrap: wrap; gap: 10px;
+  border-color: rgba(251,191,36,.35);
+  background: rgba(251,191,36,.06);
+}
+.pday-approve-area {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+
+/* ── PAY WAGE BUTTON ── */
+.btn-pay-wage {
+  width: 100%; padding: 16px; border-radius: var(--r-sm);
+  background: linear-gradient(135deg, #065f46, #059669, #34d399);
+  border: none; color: #fff; font-size: 16px; font-weight: 800;
+  cursor: pointer; font-family: inherit; margin-top: 10px;
+  box-shadow: 0 4px 20px rgba(5,150,105,.5);
+  transition: transform .15s, box-shadow .15s;
+  letter-spacing: .3px;
+}
+.btn-pay-wage:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(5,150,105,.65);
+}
+.btn-pay-wage:active { transform: scale(.97); }
+
+/* ── PAY WAGE MODAL — balance display ── */
+.pay-wage-balance-box {
+  background: linear-gradient(135deg, rgba(52,211,153,.12), rgba(5,150,105,.12));
+  border: 1.5px solid rgba(52,211,153,.4);
+  border-radius: var(--r-sm); padding: 16px; margin: 14px 0;
+  text-align: center;
+}
+.pwb-label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+.pwb-amount { font-size: 30px; font-weight: 900; color: var(--green); }
+
+/* Preset buttons */
+.pay-preset-btn {
+  flex: 1; padding: 10px 14px; border-radius: var(--r-sm);
+  background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.35);
+  color: var(--green); font-size: 14px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  transition: background .15s, transform .1s;
+}
+.pay-preset-btn:hover { background: rgba(52,211,153,.22); }
+.pay-preset-btn:active { transform: scale(.96); }
+
+/* ── PAYMENT HISTORY LIST ── */
+.payment-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: linear-gradient(135deg, rgba(52,211,153,.07), rgba(5,150,105,.05));
+  border: 1px solid rgba(52,211,153,.25);
+  border-radius: var(--r-sm); padding: 14px; margin-bottom: 8px;
+  transition: background .2s;
+}
+.payment-item:hover { background: rgba(52,211,153,.12); }
+.payment-icon { font-size: 26px; line-height: 1; flex-shrink: 0; }
+.payment-info { flex: 1; min-width: 0; }
+.payment-amount { font-size: 18px; font-weight: 900; color: var(--green); }
+.payment-note { font-size: 13px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.payment-date { font-size: 11px; color: rgba(255,255,255,.35); margin-top: 4px; }
+.payment-badge {
+  flex-shrink: 0; align-self: flex-start;
+  background: rgba(52,211,153,.2); border: 1px solid rgba(52,211,153,.4);
+  color: var(--green); font-size: 10px; font-weight: 800;
+  padding: 3px 9px; border-radius: 50px; white-space: nowrap;
+}
+
+/* ── UPDATE BANNER (PWA auto-update) ── */
+.update-banner {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120px);
+  z-index: 9999;
+  width: calc(100% - 32px);
+  max-width: 400px;
+  background: linear-gradient(135deg, #1c2450, #131833);
+  border: 1px solid rgba(96, 165, 250, .4);
+  border-radius: 18px;
+  padding: 16px 18px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  opacity: 0;
+  transition: transform .4s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+}
+.update-banner-show {
+  transform: translateX(-50%) translateY(0) !important;
+  opacity: 1 !important;
+}
+.update-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+.update-banner-content span { font-size: 15px; font-weight: 700; }
+.update-banner-btns { display: flex; gap: 8px; width: 100%; }
+.update-btn-ok {
+  flex: 1;
+  padding: 11px;
+  border-radius: 50px;
+  background: linear-gradient(135deg, #2563eb, #60a5fa);
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+}
+.update-btn-skip {
+  padding: 11px 16px;
+  border-radius: 50px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  color: rgba(255,255,255,.5);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+

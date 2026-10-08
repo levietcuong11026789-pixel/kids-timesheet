@@ -42,16 +42,18 @@
           <div class="date-txt" id="date-display"></div>
         </div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-shrink:0">
         <button class="parent-btn" onclick="openStatsModal()">📊</button>
         <button class="parent-btn" onclick="openCalModal()">📅</button>
         <button class="parent-btn" onclick="openPinModal()">👨‍👩‍👧 Ba/Mẹ</button>
       </div>
+    </div>
 
     <!-- KID TABS -->
     <div class="kid-tabs">
       <button class="kid-tab active" id="tab-be1" onclick="switchKid('be1')">👦 Bé Lớn</button>
-      <button class="kid-tab" id="tab-be2" onclick="switchKid('be2')">👧 Bé Nhỏ</button></div></div>
+      <button class="kid-tab" id="tab-be2" onclick="switchKid('be2')">👧 Bé Nhỏ</button>
+    </div>
 
     <!-- CHILD VIEW -->
     <div id="child-view">
@@ -80,26 +82,6 @@
       <div class="section-block">
         <div class="section-title">📋 Việc của bé</div>
         <div class="task-grid" id="task-grid"></div>
-        <div class="task-grid" style="margin-top:10px">
-          <div class="task-card" onclick="openScoreModal()">
-            <div class="tc-icon">🏆</div>
-            <div class="tc-name">Điểm KT</div>
-            <div class="tc-desc">Nhập điểm nhiều lần/ngày</div>
-            <div class="tc-reward green">+1k ~ +5k đ</div>
-          </div>
-          <div class="task-card task-custom" onclick="openCustomModal()">
-            <div class="tc-icon">✍️</div>
-            <div class="tc-name">Việc khác</div>
-            <div class="tc-desc">Đề xuất việc + số tiền</div>
-            <div class="tc-reward primary">Tự đề xuất</div>
-          </div>
-          <div class="task-card task-penalty" onclick="openPenaltyModal()">
-            <div class="tc-icon">⚠️</div>
-            <div class="tc-name">Phạt</div>
-            <div class="tc-desc">Ba/Mẹ trừ tiền</div>
-            <div class="tc-reward red">Trừ tiền</div>
-          </div>
-        </div>
       </div>
 
       <!-- PENDING LIST -->
@@ -140,11 +122,18 @@
         </div>
 
         <div class="section-block">
-          <div class="section-title">📅 Lịch sử tháng này</div>
+          <div class="section-header-nav">
+            <div class="section-title">📅 Lịch sử tháng</div>
+            <div class="parent-month-nav">
+              <button class="cal-nav-btn" onclick="changeParentMonth(-1)">◀</button>
+              <span id="parent-month-label" class="parent-month-lbl">Tháng --/----</span>
+              <button class="cal-nav-btn" onclick="changeParentMonth(1)">▶</button>
+            </div>
+          </div>
           <div id="monthly-list" class="monthly-list"></div>
           <div class="summary-row" style="margin-top:12px">
             <div class="summary-card gold-card" style="flex:1">
-              <div class="sc-label">Tổng tháng</div>
+              <div class="sc-label" id="parent-month-total-label">Tổng tháng</div>
               <div class="sc-val" id="parent-month-total">0 đ</div>
             </div>
           </div>
@@ -157,6 +146,12 @@
             <input type="number" id="balance-input" placeholder="39000">
             <button onclick="saveBalance()" class="setting-btn">Lưu</button>
           </div>
+          <button class="btn-pay-wage" onclick="openPayWageModal()">💸 Thanh toán lương cho bé</button>
+        </div>
+
+        <div class="section-block">
+          <div class="section-title">📜 Lịch sử thanh toán</div>
+          <div id="payment-history-list"><div class="empty-msg">Chưa có lần thanh toán nào</div></div>
         </div>
 
         <div class="section-block">
@@ -429,6 +424,105 @@
 
   <div id="toast" class="toast hidden"></div>
   <div id="fx-layer"></div>
+
+  <!-- CAL DAY DETAIL MODAL -->
+  <div id="cal-det-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeCalDetModal()"></div>
+    <div class="modal-box cal-det-box">
+      <button class="modal-close" onclick="closeCalDetModal()">✕</button>
+      <div class="modal-icon">📋</div>
+      <h2 id="cal-det-date">Ngày ...</h2>
+      <div id="cal-det-body" class="cal-det-body"></div>
+      <button class="btn-submit" id="cal-det-add-btn" style="margin-top:16px">✏️ Ghi thêm việc</button>
+    </div>
+  </div>
+
+  <!-- CONFIRM MODAL -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeConfirmModal()"></div>
+    <div class="modal-box" style="max-width:320px">
+      <div class="modal-icon">🔄</div>
+      <h2 id="confirm-title">Xác nhận</h2>
+      <p class="modal-sub" id="confirm-body"></p>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn-primary" style="flex:1;background:var(--card-bg);border:1px solid rgba(255,255,255,.15)" onclick="closeConfirmModal()">Giữ lại</button>
+        <button class="btn-primary red-btn" style="flex:1" id="confirm-ok-btn">Xác nhận</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PARENT DAY DETAIL MODAL -->
+  <div id="parent-day-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeParentDayModal()"></div>
+    <div class="modal-box pday-modal-box">
+      <button class="modal-close" onclick="closeParentDayModal()">✕</button>
+      <div class="modal-icon">📋</div>
+      <h2 id="pday-date-title">Ngày ...</h2>
+      <div class="pday-summary-row" id="pday-summary"></div>
+      <div id="pday-task-list" class="pday-task-list"></div>
+    </div>
+  </div>
+
+  <!-- PAY WAGE MODAL -->
+  <div id="pay-wage-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closePayWageModal()"></div>
+    <div class="modal-box">
+      <button class="modal-close" onclick="closePayWageModal()">✕</button>
+      <div class="modal-icon">💸</div>
+      <h2>Thanh toán lương</h2>
+      <p class="modal-sub">Xác nhận đã trả tiền lương cho bé</p>
+
+      <div class="pay-wage-balance-box">
+        <div class="pwb-label">Số dư hiện tại của bé</div>
+        <div class="pwb-amount" id="pay-wage-current-balance">0 đ</div>
+      </div>
+
+      <div class="modal-label">Số tiền thanh toán (đ):</div>
+      <div class="amount-stepper" style="margin:10px 0 16px">
+        <button onclick="changePayWageAmt(-5000)">−5k</button>
+        <button onclick="changePayWageAmt(-1000)">−1k</button>
+        <span id="pay-wage-amount">0</span>
+        <button onclick="changePayWageAmt(1000)">+1k</button>
+        <button onclick="changePayWageAmt(5000)">+5k</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="pay-preset-btn" onclick="setPayWagePreset('all')">💯 Trả hết</button>
+        <button class="pay-preset-btn" onclick="setPayWagePreset('half')">½ Trả nửa</button>
+      </div>
+
+      <div class="modal-label">Ghi chú (tuỳ chọn):</div>
+      <input type="text" id="pay-wage-note" class="text-input" placeholder="Vd: Lương tháng 7, thưởng học tốt..." style="margin-bottom:14px">
+
+      <button class="btn-primary" style="width:100%;background:linear-gradient(135deg,#059669,#34d399)" onclick="confirmPayWage()">✅ Xác nhận thanh toán</button>
+    </div>
+  </div>
+
+
+  <!-- CAL ADD TASK MODAL -->
+  <div id="cal-add-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeCalAddModal()"></div>
+    <div class="modal-box" style="max-height:88vh;overflow-y:auto">
+      <button class="modal-close" onclick="closeCalAddModal()">✕</button>
+      <div class="modal-icon">✏️</div>
+      <h2>Ghi việc</h2>
+      <p class="modal-sub" id="cal-add-date-label"></p>
+      <div class="modal-label">Chọn công việc:</div>
+      <div id="cal-add-task-list" class="cal-add-task-list"></div>
+      <!-- Custom row -->
+      <div id="cal-add-custom-row" class="hidden" style="margin-top:10px">
+        <div class="modal-label">Tên công việc:</div>
+        <input type="text" id="cal-add-custom-name" class="text-input" placeholder="Vd: Rửa chén, Tưới cây...">
+        <div class="modal-label" style="margin-top:8px">Số tiền (đ):</div>
+        <div class="amount-stepper">
+          <button onclick="changeCalAddAmt(-500)">−500</button>
+          <span id="cal-add-custom-amount">2,000</span>
+          <button onclick="changeCalAddAmt(500)">+500</button>
+        </div>
+      </div>
+      <div class="reward-preview" id="cal-add-preview" style="margin-top:12px">Chọn công việc bên trên</div>
+      <button class="btn-submit" onclick="submitCalAddTask()">📤 Gửi Ba/Mẹ duyệt</button>
+    </div>
+  </div>
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
