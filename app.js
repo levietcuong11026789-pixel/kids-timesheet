@@ -1,8 +1,12 @@
 // =============================================
-// BẢNG CHẤM CÔNG BÉ YÊU — app.js v3.6.3
+// BẢNG CHẤM CÔNG BÉ YÊU — app.js v3.7.0
 // =============================================
 
-const CURRENT_APP_VERSION = '3.6.3';
+const CURRENT_APP_VERSION = '3.7.0';
+let _isUpdatingApp = false;
+let _waitingServiceWorker = null;
+
+// Xóa cache cũ nếu version thay đổi
 if (localStorage.getItem('app_v') !== CURRENT_APP_VERSION) {
   localStorage.setItem('app_v', CURRENT_APP_VERSION);
   if ('caches' in window) {
@@ -10,40 +14,105 @@ if (localStorage.getItem('app_v') !== CURRENT_APP_VERSION) {
   }
 }
 
-// ── SERVICE WORKER REGISTRATION (PWA Auto-Update Seamlessly) ──
+// ── TỰ ĐỘNG PHÁT HIỆN BẢN MỚI TỪ VERSION.JSON ──
+async function checkAppVersionOnline() {
+  if (_isUpdatingApp) return;
+  try {
+    const res = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const info = await res.json();
+    if (info && info.version && info.version !== CURRENT_APP_VERSION) {
+      console.log(`[Auto-Update] Phát hiện bản mới: ${info.version} (hiện tại: ${CURRENT_APP_VERSION})`);
+      showUpdateNotification(info.version);
+    }
+  } catch (err) {
+    // Offline hoặc mạng gián đoạn, bỏ qua
+  }
+}
+
+function showUpdateNotification(newVer) {
+  const banner = document.getElementById('update-banner');
+  const txt = document.getElementById('update-banner-text');
+  if (banner) {
+    if (txt) txt.textContent = `🎉 Đã có bản cập nhật mới (${newVer})!`;
+    banner.classList.add('update-banner-show');
+  }
+}
+
+function hideUpdateBanner() {
+  const banner = document.getElementById('update-banner');
+  if (banner) banner.classList.remove('update-banner-show');
+}
+
+async function applyUpdateNow() {
+  _isUpdatingApp = true;
+  hideUpdateBanner();
+  showToast('🚀 Đang cập nhật phiên bản mới...');
+
+  if (_waitingServiceWorker) {
+    _waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+  }
+
+  if ('caches' in window) {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch (e) {}
+  }
+
+  setTimeout(() => {
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.location.replace(`${cleanUrl}?v=${Date.now()}`);
+  }, 400);
+}
+
+// ── SERVICE WORKER REGISTRATION ──
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
-    // Kiểm tra update ngay khi load và mỗi 15 giây
     reg.update();
-    setInterval(() => reg.update(), 15000);
+    setInterval(() => {
+      reg.update();
+      checkAppVersionOnline();
+    }, 15000);
 
-    // Nếu đã có worker đang chờ (waiting) → tự động activate ngay
     if (reg.waiting) {
-      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      _waitingServiceWorker = reg.waiting;
+      showUpdateNotification('mới');
     }
 
-    // ✅ Phát hiện SW mới được tải về (installing) → kích hoạt tự động
     reg.addEventListener('updatefound', () => {
       const newWorker = reg.installing;
       if (!newWorker) return;
       newWorker.addEventListener('statechange', () => {
         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          // Tự động chuyển qua phiên bản mới không cần nhấn nút
-          newWorker.postMessage({ type: 'SKIP_WAITING' });
+          _waitingServiceWorker = newWorker;
+          showUpdateNotification('mới');
         }
       });
     });
   }).catch(() => {});
 
-  // ✅ Khi SW đổi (sau skipWaiting) → tự động reload để áp dụng bản mới ngay lập tức
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!refreshing) {
+    if (!refreshing && _isUpdatingApp) {
       refreshing = true;
       window.location.reload();
     }
   });
 }
+
+// Kiểm tra ngay khi khởi động và mỗi khi quay lại app (điện thoại/laptop)
+checkAppVersionOnline();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    checkAppVersionOnline();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(reg => reg && reg.update());
+    }
+  }
+});
+window.addEventListener('focus', checkAppVersionOnline);
+
 
 
 
@@ -1175,14 +1244,14 @@ function closeCalDetModal() { hide('cal-det-modal'); }
 // Keep old cal-day-detail hidden (no longer used)
 function _unusedCalDayDetail() {}
 
-// ── CAL ADD TASK MODAL ──────────────────────────
+// ── CAL ADD TASK MODAL (MULTI-SELECT) ───────────
 let calAddDateKey = null;
-let calAddSelectedTask = null;
+let calAddSelectedMap = new Map();
 let calAddCustomAmt = 2000;
 
 function openCalAddModal(dateKey) {
   calAddDateKey = dateKey;
-  calAddSelectedTask = null;
+  calAddSelectedMap.clear();
   calAddCustomAmt = 2000;
   const [y, m, d] = dateKey.split('-');
   document.getElementById('cal-add-date-label').textContent = `Ngày ${parseInt(d)}/${parseInt(m)}/${y}`;
@@ -1194,76 +1263,108 @@ function openCalAddModal(dateKey) {
     { id:'custom',  icon:'✍️', label:'Việc khác (tự nhập)', value: 2000 }
   ];
   listEl.innerHTML = allTasks.map(t =>
-    `<button class="cal-task-pill" data-id="${t.id}" data-label="${t.label}" data-icon="${t.icon}" data-value="${t.value}" onclick="selectCalAddTask(this)">
-       ${t.icon} ${t.label} <span class="cpill-val">+${t.value.toLocaleString('vi-VN')}đ</span>
+    `<button class="cal-task-pill" data-id="${t.id}" data-label="${t.label}" data-icon="${t.icon}" data-value="${t.value}" onclick="toggleCalAddTask(this)">
+       <span class="cpill-check">✓</span> ${t.icon} ${t.label} <span class="cpill-val">+${t.value.toLocaleString('vi-VN')}đ</span>
      </button>`
   ).join('');
   document.getElementById('cal-add-custom-row').classList.add('hidden');
   document.getElementById('cal-add-custom-name').value = '';
-  document.getElementById('cal-add-preview').textContent = 'Chọn công việc bên trên';
-  document.getElementById('cal-add-preview').style.color = 'var(--text-dim)';
+  updateCalAddPreview();
   show('cal-add-modal');
 }
 function closeCalAddModal() { hide('cal-add-modal'); }
 
-function selectCalAddTask(el) {
-  document.querySelectorAll('#cal-add-task-list .cal-task-pill').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
-  calAddSelectedTask = {
-    id:    el.dataset.id,
-    label: el.dataset.label,
-    icon:  el.dataset.icon,
-    value: parseInt(el.dataset.value)
-  };
-  const isCustom = calAddSelectedTask.id === 'custom';
-  document.getElementById('cal-add-custom-row').classList.toggle('hidden', !isCustom);
+function toggleCalAddTask(el) {
+  const id = el.dataset.id;
+  if (calAddSelectedMap.has(id)) {
+    calAddSelectedMap.delete(id);
+    el.classList.remove('active');
+  } else {
+    calAddSelectedMap.set(id, {
+      id: el.dataset.id,
+      label: el.dataset.label,
+      icon: el.dataset.icon,
+      value: parseInt(el.dataset.value)
+    });
+    el.classList.add('active');
+  }
+  const isCustomActive = calAddSelectedMap.has('custom');
+  document.getElementById('cal-add-custom-row').classList.toggle('hidden', !isCustomActive);
   updateCalAddPreview();
 }
 
 function changeCalAddAmt(d) {
   calAddCustomAmt = Math.max(500, calAddCustomAmt + d);
   document.getElementById('cal-add-custom-amount').textContent = calAddCustomAmt.toLocaleString('vi-VN');
+  if (calAddSelectedMap.has('custom')) {
+    calAddSelectedMap.get('custom').value = calAddCustomAmt;
+  }
   updateCalAddPreview();
 }
 
 function updateCalAddPreview() {
-  if (!calAddSelectedTask) return;
   const prev = document.getElementById('cal-add-preview');
-  if (calAddSelectedTask.id === 'custom') {
-    prev.innerHTML = `📝 Đề xuất: <b>${calAddCustomAmt.toLocaleString('vi-VN')} đ</b>`;
-    prev.style.color = 'var(--gold)';
-  } else {
-    const val = calAddSelectedTask.value;
-    prev.innerHTML = val >= 0
-      ? `🎉 Thưởng: <b class="green">+${val.toLocaleString('vi-VN')} đ</b>`
-      : `⚠️ Trừ: <b class="red">−${Math.abs(val).toLocaleString('vi-VN')} đ</b>`;
-    prev.style.color = val >= 0 ? 'var(--green)' : 'var(--red)';
+  const submitBtn = document.querySelector('#cal-add-modal .btn-submit');
+  const count = calAddSelectedMap.size;
+  if (count === 0) {
+    prev.innerHTML = '👉 Nhấn chọn một hoặc nhiều công việc bên trên';
+    prev.style.color = 'var(--text-dim)';
+    if (submitBtn) submitBtn.textContent = '📤 Gửi Ba/Mẹ duyệt';
+    return;
   }
+
+  let totalVal = 0;
+  calAddSelectedMap.forEach((task, id) => {
+    const val = id === 'custom' ? calAddCustomAmt : task.value;
+    totalVal += val;
+  });
+
+  prev.innerHTML = `🎉 Đã chọn <b>${count} việc</b>: <b class="green">+${totalVal.toLocaleString('vi-VN')} đ</b>`;
+  prev.style.color = 'var(--green)';
+  if (submitBtn) submitBtn.textContent = `📤 Gửi Ba/Mẹ duyệt (${count} việc • +${totalVal.toLocaleString('vi-VN')} đ)`;
 }
 
 async function submitCalAddTask() {
-  if (!calAddSelectedTask || !calAddDateKey) { showToast('⚠️ Chọn công việc trước!'); return; }
-  let label = calAddSelectedTask.label;
-  let value = calAddSelectedTask.value;
-  let icon  = calAddSelectedTask.icon;
-  if (calAddSelectedTask.id === 'custom') {
-    const name = document.getElementById('cal-add-custom-name').value.trim();
-    if (!name) { showToast('⚠️ Nhập tên công việc!'); return; }
-    label = name; value = calAddCustomAmt;
+  if (calAddSelectedMap.size === 0 || !calAddDateKey) {
+    showToast('⚠️ Vui lòng chọn ít nhất 1 công việc!');
+    return;
   }
-  await db.ref(kp(`tasks/${calAddDateKey}`)).push({
-    type: calAddSelectedTask.id === 'custom' ? 'custom' : 'simple',
-    taskId: calAddSelectedTask.id,
-    label, icon, value,
-    status: 'pending', createdAt: Date.now(),
-    retroEntry: true
-  });
+  
+  if (calAddSelectedMap.has('custom')) {
+    const name = document.getElementById('cal-add-custom-name').value.trim();
+    if (!name) {
+      showToast('⚠️ Vui lòng nhập tên công việc tự nhập!');
+      return;
+    }
+    const customTask = calAddSelectedMap.get('custom');
+    customTask.label = name;
+    customTask.value = calAddCustomAmt;
+  }
+
+  const tasksToPush = Array.from(calAddSelectedMap.values());
+  const now = Date.now();
+  
+  for (let i = 0; i < tasksToPush.length; i++) {
+    const t = tasksToPush[i];
+    await db.ref(kp(`tasks/${calAddDateKey}`)).push({
+      type: t.id === 'custom' ? 'custom' : 'simple',
+      taskId: t.id,
+      label: t.label,
+      icon: t.icon,
+      value: t.value,
+      status: 'pending',
+      createdAt: now + i,
+      retroEntry: true
+    });
+  }
+
+  const count = tasksToPush.length;
   closeCalAddModal();
-  // Refresh the day detail
   showDayDetail(calAddDateKey);
   renderCal();
-  spawnCoin(); playSound('submit');
-  showToast(`📤 Đã ghi việc "${label}" vào ngày ${calAddDateKey.split('-').slice(1).reverse().join('/')}`);
+  spawnCoin();
+  playSound('submit');
+  showToast(`📤 Đã gửi ${count} việc vào ngày ${calAddDateKey.split('-').slice(1).reverse().join('/')}!`);
 }
 
 
@@ -1313,6 +1414,119 @@ async function loadTaskConfig() {
   renderTaskGrid();
 }
 
+// ── MULTI-SELECT MODE ON MAIN SCREEN ───────────
+let isMultiSelectMode = false;
+let multiSelectedTaskIds = new Set();
+
+function toggleMultiSelectMode(forcedState) {
+  if (typeof forcedState === 'boolean') {
+    isMultiSelectMode = forcedState;
+  } else {
+    isMultiSelectMode = !isMultiSelectMode;
+  }
+  
+  if (!isMultiSelectMode) {
+    multiSelectedTaskIds.clear();
+  }
+  
+  const btn = document.getElementById('btn-toggle-multi');
+  if (btn) {
+    btn.classList.toggle('active', isMultiSelectMode);
+    btn.innerHTML = isMultiSelectMode ? '✕ Huỷ chọn nhiều' : '☑️ Chọn nhiều việc';
+  }
+  
+  const grid = document.getElementById('task-grid');
+  if (grid) {
+    grid.classList.toggle('multi-mode', isMultiSelectMode);
+  }
+  
+  updateMultiSelectBar();
+  renderTaskGrid();
+}
+
+function updateMultiSelectBar() {
+  const bar = document.getElementById('multiselect-bar');
+  if (!bar) return;
+  if (!isMultiSelectMode || multiSelectedTaskIds.size === 0) {
+    bar.classList.remove('show');
+    return;
+  }
+  
+  const count = multiSelectedTaskIds.size;
+  let totalReward = 0;
+  multiSelectedTaskIds.forEach(id => {
+    const cfg = taskConfig.find(t => t.id === id);
+    if (cfg) totalReward += cfg.value;
+  });
+  
+  document.getElementById('multi-count').textContent = count;
+  document.getElementById('multi-total').textContent = `+${totalReward.toLocaleString('vi-VN')} đ`;
+  bar.classList.add('show');
+}
+
+function onTaskCardClick(taskId, isApproved, isPending, pendingFirebaseId, label) {
+  if (isApproved) {
+    showToast('✅ Việc này đã được Ba/Mẹ duyệt!');
+    return;
+  }
+  if (isPending) {
+    cancelPendingTask(pendingFirebaseId, label);
+    return;
+  }
+  
+  if (isMultiSelectMode) {
+    if (multiSelectedTaskIds.has(taskId)) {
+      multiSelectedTaskIds.delete(taskId);
+    } else {
+      multiSelectedTaskIds.add(taskId);
+    }
+    renderTaskGrid();
+    updateMultiSelectBar();
+    return;
+  }
+  
+  submitSimpleTask(taskId);
+}
+
+async function submitMultiTasks() {
+  if (multiSelectedTaskIds.size === 0) {
+    showToast('⚠️ Vui lòng chọn ít nhất 1 công việc!');
+    return;
+  }
+  
+  const taskIds = Array.from(multiSelectedTaskIds);
+  const now = Date.now();
+  let submittedCount = 0;
+  
+  for (let i = 0; i < taskIds.length; i++) {
+    const taskId = taskIds[i];
+    const cfg = taskConfig.find(t => t.id === taskId);
+    if (!cfg) continue;
+    
+    const already = Object.values(todayTasks).some(
+      t => t.taskId === taskId && (t.status === 'pending' || t.status === 'approved')
+    );
+    if (already) continue;
+    
+    await db.ref(kp(`tasks/${todayKey()}`)).push({
+      type: 'simple',
+      taskId: cfg.id,
+      label: cfg.label,
+      icon: cfg.icon,
+      value: cfg.value,
+      status: 'pending',
+      createdAt: now + i
+    });
+    submittedCount++;
+  }
+  
+  multiSelectedTaskIds.clear();
+  toggleMultiSelectMode(false);
+  spawnCoin();
+  playSound('submit');
+  showToast(`📤 Đã gửi ${submittedCount} công việc! Chờ Ba/Mẹ duyệt ⏳`);
+}
+
 function renderTaskGrid() {
   if (_dragCtx && _dragCtx.active) return;
   const grid = document.getElementById('task-grid');
@@ -1326,14 +1540,12 @@ function renderTaskGrid() {
       ([,x]) => x.taskId === t.id && x.status === 'approved');
     const isPending  = !!pendingEntry;
     const isApproved = !!approvedEntry;
+    const isMultiSelected = isMultiSelectMode && multiSelectedTaskIds.has(t.id);
     const badge = isApproved ? '✅' : isPending ? '⏳' : '';
-    const stateClass = isApproved ? 'approved' : isPending ? 'pending' : '';
-    const clickFn = isApproved
-      ? `showToast('✅ Việc này đã được Ba/Mẹ duyệt!')`
-      : isPending
-        ? `cancelPendingTask('${pendingEntry[0]}', '${t.label}')`
-        : `submitSimpleTask('${t.id}')`;
-    return `<div class="task-card ${stateClass}" data-idx="${i}" onclick="${clickFn}">
+    let stateClass = isApproved ? 'approved' : isPending ? 'pending' : '';
+    if (isMultiSelected) stateClass += ' multi-selected';
+    const pId = pendingEntry ? pendingEntry[0] : '';
+    return `<div class="task-card ${stateClass}" data-idx="${i}" onclick="onTaskCardClick('${t.id}', ${isApproved}, ${isPending}, '${pId}', '${t.label}')">
       <div class="tc-icon">${t.icon}</div>
       <div class="tc-name">${t.label}</div>
       <div class="tc-reward green">+${t.value.toLocaleString('vi-VN')} đ</div>
@@ -1380,6 +1592,7 @@ function setupDragReorder() {
 }
 
 function onGridPointerDown(e) {
+  if (isMultiSelectMode) return;
   // Only drag cards with data-idx (configurable tasks, not fixed ones)
   const card = e.target.closest('.task-card[data-idx]');
   if (!card) return;

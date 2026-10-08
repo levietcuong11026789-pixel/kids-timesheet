@@ -1,15 +1,16 @@
 // ── SERVICE WORKER — kids-timesheet ─────────────
 // ⬆️ MỖI KHI CẬP NHẬT APP, CHỈ CẦN ĐỔI SỐ VERSION NÀY
-const APP_VERSION = '3.6.3';
+const APP_VERSION = '3.7.0';
 const CACHE_NAME = `kids-v${APP_VERSION}`;
 
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=3.6.3',
-  './app.js?v=3.6.3',
+  './style.css?v=3.7.0',
+  './app.js?v=3.7.0',
   './firebase-config.js',
-  './manifest.json'
+  './manifest.json',
+  './version.json'
 ];
 
 // Install: cache assets, activate immediately
@@ -32,8 +33,8 @@ self.addEventListener('activate', e => {
 // Fetch: network-first for everything, fallback to cache for offline
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Always fetch fresh HTML/JS/CSS when online
-  if (e.request.mode === 'navigate' || url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html')) {
+  // Always fetch fresh HTML/JS/CSS/JSON when online
+  if (e.request.mode === 'navigate' || url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html') || url.pathname.endsWith('.json')) {
     e.respondWith(
       fetch(e.request, { cache: 'no-store' })
         .then(res => {

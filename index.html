@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=3.6.3">
+  <link rel="stylesheet" href="style.css?v=3.7.0">
 </head>
 <body>
 
@@ -80,7 +80,10 @@
 
       <!-- TASKS - rendered dynamically per kid -->
       <div class="section-block">
-        <div class="section-title">📋 Việc của bé</div>
+        <div class="section-header-nav" style="margin-bottom:10px">
+          <div class="section-title" style="margin:0">📋 Việc của bé</div>
+          <button id="btn-toggle-multi" class="btn-toggle-multi" onclick="toggleMultiSelectMode()">☑️ Chọn nhiều việc</button>
+        </div>
         <div class="task-grid" id="task-grid"></div>
       </div>
 
@@ -524,10 +527,33 @@
     </div>
   </div>
 
+  <!-- MULTI-SELECT FLOATING ACTION BAR -->
+  <div id="multiselect-bar" class="multiselect-bar">
+    <div class="multi-bar-info">
+      <span>Đã chọn <b id="multi-count">0</b> việc</span>
+      <span class="multi-bar-total" id="multi-total">+0 đ</span>
+    </div>
+    <div class="multi-bar-actions">
+      <button class="btn-submit-multi" onclick="submitMultiTasks()">📤 Gửi Ba/Mẹ duyệt</button>
+      <button class="btn-cancel-multi" onclick="toggleMultiSelectMode(false)" title="Huỷ chọn">✕</button>
+    </div>
+  </div>
+
+  <!-- UPDATE BANNER (PWA auto-update) -->
+  <div id="update-banner" class="update-banner">
+    <div class="update-banner-content">
+      <span id="update-banner-text">🎉 Đã có phiên bản mới v3.7.0!</span>
+      <div class="update-banner-btns">
+        <button class="update-btn-ok" onclick="applyUpdateNow()">🚀 Cập nhật ngay</button>
+        <button class="update-btn-skip" onclick="hideUpdateBanner()">Để sau</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="firebase-config.js"></script>
-  <script src="app.js?v=3.6.3"></script>
+  <script src="app.js?v=3.7.0"></script>
 </body>
 </html>
 

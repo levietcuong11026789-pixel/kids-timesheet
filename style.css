@@ -784,8 +784,28 @@ html, body {
 }
 .cal-task-pill:active { transform: scale(.94); }
 .cal-task-pill.active {
-  background: rgba(167,139,250,.25);
-  border-color: var(--primary); color: var(--primary);
+  background: rgba(52, 211, 153, 0.22);
+  border-color: var(--green);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.35);
+}
+.cal-task-pill .cpill-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.4);
+  font-size: 10px;
+  font-weight: 900;
+  color: transparent;
+  transition: all .15s;
+}
+.cal-task-pill.active .cpill-check {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
 }
 .cpill-val {
   font-size: 11px; color: var(--green); font-weight: 800;
@@ -1003,5 +1023,159 @@ html, body {
   cursor: pointer;
   font-family: inherit;
 }
+
+/* ── MULTI-SELECT TASK MODE ── */
+.btn-toggle-multi {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 50px;
+  border: 1px solid rgba(167,139,250,.4);
+  background: rgba(167,139,250,.12);
+  color: var(--primary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-toggle-multi:hover {
+  background: rgba(167,139,250,.25);
+  border-color: var(--primary);
+}
+.btn-toggle-multi.active {
+  background: rgba(239,68,68,.2);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.task-grid.multi-mode .task-card {
+  position: relative;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.task-grid.multi-mode .task-card:not(.approved):not(.pending)::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+  transition: all .2s;
+}
+.task-grid.multi-mode .task-card.multi-selected {
+  border-color: var(--green) !important;
+  background: rgba(52, 211, 153, 0.14) !important;
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.4) !important;
+  transform: translateY(-2px);
+}
+.task-grid.multi-mode .task-card.multi-selected::after {
+  content: '✓';
+  background: var(--green);
+  border-color: var(--green);
+}
+
+/* Floating bottom bar for multi-select submission */
+.multiselect-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120px);
+  width: calc(100% - 32px);
+  max-width: 440px;
+  background: linear-gradient(135deg, rgba(28, 20, 60, 0.96), rgba(40, 24, 85, 0.96));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1.5px solid var(--primary);
+  border-radius: 20px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 20px rgba(167, 139, 250, 0.3);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .35s cubic-bezier(.34,1.56,.64,1), opacity .25s;
+}
+.multiselect-bar.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.multi-bar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.multi-bar-info span {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.multi-bar-info span b {
+  color: #fff;
+  font-size: 15px;
+}
+.multi-bar-total {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--green);
+}
+.multi-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-submit-multi {
+  padding: 10px 16px;
+  border-radius: 50px;
+  background: linear-gradient(135deg, #059669, #10b981);
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+  transition: transform .1s;
+}
+.btn-submit-multi:hover {
+  transform: scale(1.02);
+}
+.btn-submit-multi:active {
+  transform: scale(.96);
+}
+.btn-cancel-multi {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s;
+}
+.btn-cancel-multi:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fff;
+}
+
 
 

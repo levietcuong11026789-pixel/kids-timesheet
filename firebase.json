@@ -5,7 +5,10 @@
       "firebase.json",
       ".firebaserc",
       "README.md",
-      "node_modules"
+      "node_modules",
+      "**/*.exe",
+      "**/*.bat",
+      "**/*.log"
     ],
     "rewrites": [
       {

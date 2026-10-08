@@ -1,16 +1,21 @@
 @echo off
-echo =========================================
-echo    DEPLOY BANG CHAM CONG BE YEU
-echo =========================================
+chcp 65001 >nul
+echo ===================================================
+echo     DEPLOY BANG CHAM CONG BE YEU (GITHUB)
+echo ===================================================
 echo.
 cd /d "g:\My Drive\Build App\kids-timesheet"
-echo [1] Dang kiem tra dang nhap Firebase...
-call npx.cmd firebase-tools login
+
+echo [1] Dang day toan bo thay doi len GitHub...
+git add .
+git commit -m "Cap nhat ung dung phien ban moi"
+git push origin main
 echo.
-echo [2] Dang deploy len Firebase Hosting...
-call npx.cmd firebase-tools deploy --only hosting
+echo ===================================================
+echo  DA DAY LEN GITHUB THANH CONG!
+echo  Cac thiet bi (dien thoai, laptop) se tu dong nhan
+echo  ban cap nhat moi ngay khi mo ung dung.
+echo ===================================================
 echo.
-echo =========================================
-echo DONE! Mo link: https://cham-cong-be-yeu.web.app
-echo =========================================
 pause
+
